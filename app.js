@@ -1078,11 +1078,17 @@ async function loadAndRenderGalleryPhotos(categoryId, grid) {
 async function moveCategoryInSection(sectionCats, idx, dir) {
   const other = idx + dir;
   if (other < 0 || other >= sectionCats.length) return;
-  const a = sectionCats[idx];
-  const b = sectionCats[other];
+  // Wie moveSection/moveCategory: die Kategorien dieses Bereichs komplett neu
+  // durchnummerieren statt nur zwei Werte zu tauschen. Das ist hier sogar
+  // besonders wichtig, weil "order" ein globales Feld über alle Bereiche
+  // hinweg ist - beim Anlegen neuer Kategorien aus unterschiedlichen
+  // Bildschirmen konnten leicht zwei Kategorien denselben Wert bekommen,
+  // wodurch ein Tausch zwischen ihnen wirkungslos blieb.
+  const arr = sectionCats.slice();
+  const [moved] = arr.splice(idx, 1);
+  arr.splice(other, 0, moved);
   try {
-    await updateDoc(doc(db, 'categories', a.id), { order: b.order });
-    await updateDoc(doc(db, 'categories', b.id), { order: a.order });
+    await Promise.all(arr.map((c, i) => updateDoc(doc(db, 'categories', c.id), { order: i })));
     await loadCategories();
     renderCategories();
   } catch (err) {
@@ -1466,11 +1472,18 @@ async function saveSection(id, updated) {
 async function moveSection(idx, dir) {
   const other = idx + dir;
   if (other < 0 || other >= state.sections.length) return;
-  const a = state.sections[idx];
-  const b = state.sections[other];
+  // Statt nur die "order"-Werte der zwei betroffenen Bereiche zu tauschen,
+  // wird die komplette Liste anhand der neuen Reihenfolge frisch und
+  // garantiert eindeutig durchnummeriert (0, 1, 2, ...). Das behebt auch
+  // "hängende" Duplikate aus früheren Speichervorgängen, bei denen zwei
+  // Bereiche versehentlich denselben Wert bekommen hatten - in dem Fall war
+  // ein Tausch identischer Werte wirkungslos ("Hoch"/"Runter" tat scheinbar
+  // nichts).
+  const arr = state.sections.slice();
+  const [moved] = arr.splice(idx, 1);
+  arr.splice(other, 0, moved);
   try {
-    await updateDoc(doc(db, 'sections', a.id), { order: b.order });
-    await updateDoc(doc(db, 'sections', b.id), { order: a.order });
+    await Promise.all(arr.map((s, i) => updateDoc(doc(db, 'sections', s.id), { order: i })));
     await loadSectionsAdmin();
   } catch (err) {
     console.error('Verschieben fehlgeschlagen:', err);
@@ -1931,11 +1944,14 @@ async function saveCategory(id, updated) {
 async function moveCategory(idx, dir) {
   const other = idx + dir;
   if (other < 0 || other >= state.categories.length) return;
-  const a = state.categories[idx];
-  const b = state.categories[other];
+  // Siehe moveSection: komplette Liste neu durchnummerieren statt nur zwei
+  // Werte zu tauschen, damit doppelte/hängende "order"-Werte sich nicht
+  // mehr wie ein wirkungsloser Klick anfühlen.
+  const arr = state.categories.slice();
+  const [moved] = arr.splice(idx, 1);
+  arr.splice(other, 0, moved);
   try {
-    await updateDoc(doc(db, 'categories', a.id), { order: b.order });
-    await updateDoc(doc(db, 'categories', b.id), { order: a.order });
+    await Promise.all(arr.map((c, i) => updateDoc(doc(db, 'categories', c.id), { order: i })));
     await loadCategoriesAdmin();
   } catch (err) {
     console.error('Verschieben fehlgeschlagen:', err);
