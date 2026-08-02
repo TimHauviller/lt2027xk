@@ -338,7 +338,6 @@ function startCountdowns() {
     $('#cd-hours').textContent = h;
     $('#cd-minutes').textContent = m;
     $('#cd-seconds').textContent = s;
-    $('#hub-mini-countdown').textContent = diff > 0 ? `${d} Tage bis zur Hochzeit` : `Es ist soweit!`;
 
     // Kategorien mit eigenem Countdown aktualisieren
     $$('.category-countdown[data-target]').forEach(el => {
@@ -1298,7 +1297,6 @@ $('#btn-back-to-hub').addEventListener('click', () => {
   renderHub();
   showScreen('#screen-hub');
 });
-$('#btn-main-back-landing').addEventListener('click', () => showScreen('#screen-landing'));
 
 async function loadResponsesForCurrentGuest() {
   if (!state.currentGuest) return;

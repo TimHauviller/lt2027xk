@@ -251,6 +251,25 @@ label { font-size: 0.85rem; color: var(--muted); display: block; margin-top: 0.5
   background: var(--sage); color: #fff; padding: 0.3rem 0.65rem;
   border-radius: 999px; font-size: 0.75rem; white-space: nowrap;
 }
+/* Persönliche Begrüßung auf der Übersicht - etwas größer und warm, damit
+   sie sich vom restlichen (eher funktionalen) Header abhebt. */
+.main-header .hub-greeting {
+  margin: 0.15rem 0 0;
+  font-size: 1.15rem;
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  color: var(--grape);
+}
+/* "Nicht du?" ist nur ein Notfall-Link (falsche Person eingeloggt) und soll
+   deshalb bewusst zurückhaltend wirken, statt mit den echten Aktionen zu
+   konkurrieren. */
+.link-btn-subtle {
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-decoration: none;
+  opacity: 0.8;
+}
+.link-btn-subtle:hover { opacity: 1; text-decoration: underline; }
 
 .categories-list { padding: 1.25rem; max-width: 640px; margin: 0 auto; }
 
