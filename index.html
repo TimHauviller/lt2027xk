@@ -26,13 +26,13 @@
   <div class="marquee"><div class="marquee-track" id="marquee-track"></div></div>
 
   <div class="photo-strip">
-    <img src="photo1.jpg" alt="Lucie und Timmy">
-    <img src="photo2.jpg" alt="Lucie und Timmy">
-    <img src="photo3.jpg" alt="Lucie und Timmy">
+    <img id="strip-photo-1" src="photo1.jpg" alt="Lucie und Timmy">
+    <img id="strip-photo-2" src="photo2.jpg" alt="Lucie und Timmy">
+    <img id="strip-photo-3" src="photo3.jpg" alt="Lucie und Timmy">
   </div>
 
   <div class="landing-content">
-    <p id="landing-subtitle">Wir heiraten in der Toskana, Italien 🇮🇹</p>
+    <p id="landing-subtitle">Wir heiraten in der Toskana, Italien</p>
     <div class="countdown" id="landing-countdown">
       <div class="countdown-box"><span id="cd-days">–</span><small>Tage</small></div>
       <div class="countdown-box"><span id="cd-hours">–</span><small>Std</small></div>
@@ -52,28 +52,52 @@
       <option value="">– Bitte auswählen –</option>
     </select>
     <button id="btn-guest-continue" class="btn btn-primary" disabled>Weiter</button>
+    <button id="btn-guest-back" class="btn btn-secondary">Zurück zur Startseite</button>
     <p class="muted small">Du findest dich nicht in der Liste? Meld dich bei Lucie & Timmy.</p>
   </div>
 </section>
 
-<!-- ===================== MAIN SCREEN ===================== -->
+<!-- ===================== HUB SCREEN (Übersicht) ===================== -->
+<section id="screen-hub" class="screen">
+  <header class="main-header">
+    <div>
+      <h1 id="hub-title">Lucie & Timmy</h1>
+      <p id="hub-greeting" class="muted"></p>
+    </div>
+    <div class="header-right">
+      <div class="mini-countdown" id="hub-mini-countdown">– Tage</div>
+      <button id="btn-hub-switch-guest" class="link-btn">Nicht du?</button>
+    </div>
+  </header>
+
+  <div class="hub-list" id="hub-list"></div>
+
+  <div class="app-footer">
+    <button id="btn-hub-back" class="btn btn-secondary">Zurück zur Startseite</button>
+  </div>
+</section>
+
+<!-- ===================== SECTION SCREEN (Kategorien eines Bereichs) ===================== -->
 <section id="screen-main" class="screen">
   <header class="main-header">
     <div>
-      <h1 id="main-title">Lucie & Timmy</h1>
-      <p id="main-greeting" class="muted"></p>
+      <h1 id="main-title">Wichtige Infos</h1>
+      <p id="main-subtitle" class="muted"></p>
     </div>
     <div class="header-right">
-      <div class="mini-countdown" id="mini-countdown">– Tage</div>
-      <button id="btn-switch-guest" class="link-btn">Nicht du?</button>
+      <button id="btn-back-to-hub" class="link-btn">Zurück zur Übersicht</button>
     </div>
   </header>
 
   <div id="categories-list" class="categories-list"></div>
+
+  <div class="app-footer">
+    <button id="btn-main-back-landing" class="btn btn-secondary">Zurück zur Startseite</button>
+  </div>
 </section>
 
 <!-- Admin-Zugang: immer sichtbar, unabhängig vom aktuellen Screen -->
-<button id="btn-open-admin" class="admin-corner-btn" title="Admin">⚙</button>
+<button id="btn-open-admin" class="admin-corner-btn" title="Admin">Admin</button>
 
 <!-- ===================== ADMIN LOGIN MODAL ===================== -->
 <div id="admin-login-modal" class="modal-overlay hidden">
@@ -101,6 +125,7 @@
 
   <nav class="admin-tabs">
     <button class="admin-tab active" data-tab="landing">Startseite</button>
+    <button class="admin-tab" data-tab="design">Design</button>
     <button class="admin-tab" data-tab="categories">Kategorien</button>
     <button class="admin-tab" data-tab="guests">Gästeliste</button>
     <button class="admin-tab" data-tab="responses">Antworten</button>
@@ -115,20 +140,45 @@
       <input type="text" id="cfg-subtitle">
       <label>Info-Text (Datum/Ort)</label>
       <input type="text" id="cfg-intro">
-      <label>Foto-URL</label>
+      <label>Hintergrundbild Startseite (URL)</label>
       <input type="text" id="cfg-photo" placeholder="https://...">
+      <label>Foto 1 im Fotostreifen (URL, optional)</label>
+      <input type="text" id="cfg-strip1" placeholder="https://...">
+      <label>Foto 2 im Fotostreifen (URL, optional)</label>
+      <input type="text" id="cfg-strip2" placeholder="https://...">
+      <label>Foto 3 im Fotostreifen (URL, optional)</label>
+      <input type="text" id="cfg-strip3" placeholder="https://...">
       <label>Hochzeitsbeginn (Countdown-Ziel)</label>
       <input type="date" id="cfg-start">
       <label>Hochzeitsende</label>
       <input type="date" id="cfg-end">
       <button id="btn-save-config" class="btn btn-primary">Speichern</button>
-      <p id="config-saved-msg" class="success-text hidden">Gespeichert ✓</p>
+      <p id="config-saved-msg" class="success-text hidden">Gespeichert</p>
+    </div>
+  </div>
+
+  <!-- Design -->
+  <div class="admin-panel" id="admin-panel-design">
+    <div class="card">
+      <p class="muted small">Passt die Farben der App an. Wirkt sich sofort auf alle Besucher aus.</p>
+      <label>Akzentfarbe (Buttons, Hervorhebungen)</label>
+      <input type="color" id="clr-terracotta">
+      <label>Hauptfarbe (Überschriften, Countdown)</label>
+      <input type="color" id="clr-sage">
+      <label>Hintergrundfarbe</label>
+      <input type="color" id="clr-cream">
+      <label>Dunkle Akzentfarbe (Textstreifen)</label>
+      <input type="color" id="clr-grape">
+      <button id="btn-save-colors" class="btn btn-primary">Speichern</button>
+      <button id="btn-reset-colors" class="btn btn-secondary">Zurücksetzen auf Standard</button>
+      <p id="colors-saved-msg" class="success-text hidden">Gespeichert</p>
     </div>
   </div>
 
   <!-- Kategorien -->
   <div class="admin-panel" id="admin-panel-categories">
     <div class="card">
+      <p class="muted small">Der Typ einer Kategorie bestimmt automatisch, in welchem Bereich der Gast sie sieht: Info-Text und Frage &amp; Antwort erscheinen unter "Wichtige Infos" bzw. "Häufig gestellte Fragen", Formular und Checkliste erscheinen unter "Noch auszufüllen".</p>
       <button id="btn-seed-categories" class="btn btn-secondary">Standard-Kategorien einfügen</button>
       <button id="btn-add-category" class="btn btn-primary">+ Neue Kategorie</button>
     </div>
