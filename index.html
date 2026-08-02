@@ -128,6 +128,7 @@
   <nav class="admin-tabs">
     <button class="admin-tab active" data-tab="landing">Startseite</button>
     <button class="admin-tab" data-tab="design">Design</button>
+    <button class="admin-tab" data-tab="sections">Bereiche</button>
     <button class="admin-tab" data-tab="categories">Kategorien</button>
     <button class="admin-tab" data-tab="guests">Gästeliste</button>
     <button class="admin-tab" data-tab="responses">Antworten</button>
@@ -177,10 +178,20 @@
     </div>
   </div>
 
+  <!-- Bereiche -->
+  <div class="admin-panel" id="admin-panel-sections">
+    <div class="card">
+      <p class="muted small">Bereiche sind die Ansichten, aus denen eure Gäste im Übersichts-Fenster wählen (z. B. "Wichtige Infos"). Hier könnt ihr Bereiche hinzufügen, umbenennen, umsortieren oder löschen. Welche Kategorie zu welchem Bereich gehört, legt ihr im Tab "Kategorien" fest.</p>
+      <button id="btn-seed-sections" class="btn btn-secondary">Standard-Bereiche einfügen</button>
+      <button id="btn-add-section" class="btn btn-primary">+ Neuer Bereich</button>
+    </div>
+    <div id="admin-sections-list"></div>
+  </div>
+
   <!-- Kategorien -->
   <div class="admin-panel" id="admin-panel-categories">
     <div class="card">
-      <p class="muted small">Der Typ einer Kategorie bestimmt automatisch, in welchem Bereich der Gast sie sieht: Info-Text und Frage &amp; Antwort erscheinen unter "Wichtige Infos", Formular und Checkliste erscheinen unter "Noch auszufüllen", ein Tag im Tagesplan erscheint unter "Tagesplan".</p>
+      <p class="muted small">Wählt für jede Kategorie einen Bereich (in welcher Ansicht die Gäste sie finden) und einen Typ (wie sie dargestellt wird: Text, Frage &amp; Antwort, Formular, Checkliste oder Tag im Tagesplan).</p>
       <button id="btn-seed-categories" class="btn btn-secondary">Standard-Kategorien einfügen</button>
       <button id="btn-add-category" class="btn btn-primary">+ Neue Kategorie</button>
     </div>

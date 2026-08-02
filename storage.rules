@@ -1,0 +1,17 @@
+rules_version = '2';
+
+// Firebase-Storage-Regeln für die Foto-Galerie der Hochzeits-App.
+// Jeder mit dem "geheimen Link" darf Fotos hochladen und ansehen
+// (max. 25 MB pro Datei, nur Bilddateien). Löschen dürfen nur
+// eingeloggte Admins (Lucie & Timmy).
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /photos/{categoryId}/{fileName} {
+      allow read: if true;
+      allow write: if request.resource.size < 25 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
+    }
+  }
+}

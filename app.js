@@ -2,26 +2,38 @@ import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc,
-  collection, getDocs, onSnapshot, query, orderBy
+  collection, getDocs, onSnapshot, query, orderBy, where
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getStorage, ref as storageRef, uploadBytes, getDownloadURL
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+const storage = getStorage(app);
 
 // ---------------------------------------------------------------
-// Bereiche: jeder Kategorie-Typ gehört automatisch zu einem Bereich,
-// der dem Gast im Übersichts-Fenster (Hub) zur Auswahl angeboten wird.
+// Bereiche: die Ansichten, zwischen denen Gäste im Übersichts-Fenster
+// (Hub) wählen können. Werden komplett in Firestore verwaltet (Admin-Tab
+// "Bereiche"), damit sie frei hinzugefügt, umbenannt oder entfernt werden
+// können. Jede Kategorie wird über cat.sectionId einem Bereich zugeordnet.
 // ---------------------------------------------------------------
-const SECTIONS = [
-  { key: 'infos', title: 'Wichtige Infos', desc: 'Alles Wichtige rund um die Hochzeit, inklusive häufig gestellter Fragen.' },
-  { key: 'todo', title: 'Noch auszufüllen', desc: 'Eure persönlichen Angaben zu Essen, Kleidung und mehr.' },
-  { key: 'tagesplan', title: 'Tagesplan', desc: 'Der Ablauf der einzelnen Tage.' }
+const DEFAULT_SECTIONS = [
+  { title: 'Wichtige Infos', desc: 'Alles Wichtige rund um die Hochzeit, inklusive häufig gestellter Fragen.', order: 0 },
+  { title: 'Noch auszufüllen', desc: 'Eure persönlichen Angaben zu Essen, Kleidung und mehr.', order: 1 },
+  { title: 'Tagesplan', desc: 'Der Ablauf der einzelnen Tage.', order: 2 }
 ];
-const TYPE_SECTION = { info: 'infos', faq: 'infos', form: 'todo', checklist: 'todo', day: 'tagesplan' };
+// Nur für die einmalige Migration alter Kategorien ohne sectionId: ordnet
+// den bisherigen Kategorie-Typ dem passenden Standard-Bereich zu.
+const LEGACY_TYPE_SECTION_TITLE = {
+  info: 'Wichtige Infos', faq: 'Wichtige Infos',
+  form: 'Noch auszufüllen', checklist: 'Noch auszufüllen',
+  day: 'Tagesplan'
+};
 
 // ---------------------------------------------------------------
 // Default (Beispiel-)Kategorien, die der Admin per Knopfdruck einfügen kann
@@ -66,7 +78,8 @@ const DEFAULT_CATEGORIES = [
   { title: "Tag 1", type: "day", order: 12, images: [],
     content: "Anreise der Gäste. Details zum Ablauf folgen." },
   { title: "Tag 2", type: "day", order: 13, images: [],
-    content: "Trauung und Feier. Details zum Ablauf folgen." }
+    content: "Trauung und Feier. Details zum Ablauf folgen." },
+  { title: "Fotos von der Hochzeit", type: "gallery", order: 14, images: [] }
 ];
 
 // ---------------------------------------------------------------
@@ -74,6 +87,7 @@ const DEFAULT_CATEGORIES = [
 // ---------------------------------------------------------------
 let state = {
   config: null,
+  sections: [],
   categories: [],
   guests: [],
   responses: [],
@@ -257,22 +271,66 @@ function startCountdowns() {
 }
 
 // ---------------------------------------------------------------
-// Kategorien laden
+// Bereiche laden
 // ---------------------------------------------------------------
-async function loadCategories() {
-  const q = query(collection(db, 'categories'), orderBy('order', 'asc'));
-  const snap = await getDocs(q);
-  state.categories = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+async function loadSections() {
+  try {
+    const q = query(collection(db, 'sections'), orderBy('order', 'asc'));
+    const snap = await getDocs(q);
+    state.sections = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    console.error('Bereiche konnten nicht geladen werden:', err);
+    state.sections = [];
+  }
+  if (state.sections.length === 0) {
+    // Fallback für die Gast-Ansicht, falls noch nie ein Admin die
+    // Standard-Bereiche angelegt hat (rein zur Anzeige, nicht gespeichert).
+    state.sections = DEFAULT_SECTIONS.map((s, i) => ({ id: `default-${i}`, ...s }));
+  }
 }
 
 // ---------------------------------------------------------------
-// Hub (Übersicht: Wichtige Infos / FAQ / Noch auszufüllen)
+// Kategorien laden (inkl. einmaliger Migration alter Kategorien
+// ohne sectionId auf Basis ihres bisherigen Typs)
 // ---------------------------------------------------------------
-function computeTodoProgress() {
-  const todoCats = state.categories.filter(c => c.type === 'form' || c.type === 'checklist');
+async function fetchCategories() {
+  const q = query(collection(db, 'categories'), orderBy('order', 'asc'));
+  const snap = await getDocs(q);
+  state.categories = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  await migrateLegacyCategorySections();
+}
+
+async function migrateLegacyCategorySections() {
+  const bySectionTitle = {};
+  state.sections.forEach(s => { bySectionTitle[s.title] = s.id; });
+  for (const cat of state.categories) {
+    if (!cat.sectionId) {
+      const wantedTitle = LEGACY_TYPE_SECTION_TITLE[cat.type];
+      const sectionId = wantedTitle && bySectionTitle[wantedTitle];
+      if (sectionId) {
+        cat.sectionId = sectionId;
+        try {
+          await updateDoc(doc(db, 'categories', cat.id), { sectionId });
+        } catch (err) {
+          // Gäste dürfen Kategorien nicht schreiben - dann bleibt es bei der
+          // In-Memory-Zuordnung für diese Sitzung, bis ein Admin vorbeischaut.
+        }
+      }
+    }
+  }
+}
+
+async function loadCategories() {
+  await fetchCategories();
+}
+
+// ---------------------------------------------------------------
+// Hub (Übersicht über alle Bereiche)
+// ---------------------------------------------------------------
+function computeSectionProgress(fillableCats) {
   let total = 0, done = 0;
   const resp = state.currentGuest ? state.responses.find(r => r.id === state.currentGuest.id) : null;
-  todoCats.forEach(cat => {
+  fillableCats.forEach(cat => {
     if (cat.type === 'form') {
       const fields = cat.fields || [];
       total += fields.length;
@@ -291,14 +349,20 @@ function computeTodoProgress() {
 function renderHub() {
   const list = $('#hub-list');
   list.innerHTML = '';
-  const progress = computeTodoProgress();
-  SECTIONS.forEach(sec => {
-    const count = state.categories.filter(c => TYPE_SECTION[c.type] === sec.key).length;
+  if (!state.sections.length) {
+    list.innerHTML = '<p class="muted">Noch keine Bereiche angelegt.</p>';
+    return;
+  }
+  state.sections.forEach(sec => {
+    const catsInSection = state.categories.filter(c => c.sectionId === sec.id);
+    const fillableCats = catsInSection.filter(c => c.type === 'form' || c.type === 'checklist');
+    const count = catsInSection.length;
     const card = document.createElement('button');
     card.type = 'button';
-    card.className = 'hub-card' + (sec.key === 'todo' ? ' hub-card--todo' : '');
+    card.className = 'hub-card' + (fillableCats.length ? ' hub-card--todo' : '');
     let progressHtml = '';
-    if (sec.key === 'todo' && progress.total > 0) {
+    if (fillableCats.length) {
+      const progress = computeSectionProgress(fillableCats);
       progressHtml = `
         <div class="progress-wrap">
           <div class="progress-bar"><div class="progress-fill" style="width:${progress.pct}%"></div></div>
@@ -307,11 +371,11 @@ function renderHub() {
     }
     card.innerHTML = `
       <h3>${escapeHtml(sec.title)}</h3>
-      <p class="muted small">${escapeHtml(sec.desc)}</p>
+      <p class="muted small">${escapeHtml(sec.desc || '')}</p>
       <p class="muted small">${count} ${count === 1 ? 'Kategorie' : 'Kategorien'}</p>
       ${progressHtml}
     `;
-    card.addEventListener('click', () => openSection(sec.key));
+    card.addEventListener('click', () => openSection(sec.id));
     list.appendChild(card);
   });
 }
@@ -341,11 +405,11 @@ function updateAdminButtonVisibility() {
   }
 }
 
-function openSection(sectionKey) {
-  state.currentSection = sectionKey;
-  const sec = SECTIONS.find(s => s.key === sectionKey);
-  $('#main-title').textContent = sec.title;
-  $('#main-subtitle').textContent = sec.desc;
+function openSection(sectionId) {
+  state.currentSection = sectionId;
+  const sec = state.sections.find(s => s.id === sectionId);
+  $('#main-title').textContent = sec ? sec.title : '';
+  $('#main-subtitle').textContent = sec ? (sec.desc || '') : '';
   renderCategories();
   showScreen('#screen-main');
 }
@@ -553,6 +617,8 @@ function renderCategoryBody(cat, body) {
     body.appendChild(renderChecklist(cat));
   } else if (cat.type === 'faq') {
     body.appendChild(renderFaq(cat));
+  } else if (cat.type === 'gallery') {
+    body.appendChild(renderGalleryUpload(cat));
   } else {
     const p = document.createElement('div');
     p.innerHTML = escapeHtml(cat.content || '').replace(/\n/g, '<br>');
@@ -562,10 +628,101 @@ function renderCategoryBody(cat, body) {
   if (gal) body.appendChild(gal);
 }
 
+// ---------------------------------------------------------------
+// Foto-Galerie: Gäste können eigene Fotos hochladen (Firebase Storage).
+// Setzt voraus, dass Storage im Firebase-Projekt aktiviert und die
+// mitgelieferten storage.rules veröffentlicht sind.
+// ---------------------------------------------------------------
+function renderGalleryUpload(cat) {
+  const wrap = document.createElement('div');
+
+  const uploadWrap = document.createElement('div');
+  uploadWrap.className = 'gallery-upload';
+  const inputId = `gallery-input-${cat.id}`;
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.multiple = true;
+  input.id = inputId;
+  input.className = 'hidden';
+  const label = document.createElement('label');
+  label.setAttribute('for', inputId);
+  label.className = 'btn btn-primary';
+  label.textContent = 'Fotos hochladen';
+  const status = document.createElement('p');
+  status.className = 'muted small gallery-status';
+  uploadWrap.appendChild(input);
+  uploadWrap.appendChild(label);
+  uploadWrap.appendChild(status);
+  wrap.appendChild(uploadWrap);
+
+  const grid = document.createElement('div');
+  grid.className = 'image-gallery gallery-uploads';
+  wrap.appendChild(grid);
+
+  input.addEventListener('change', async () => {
+    const files = Array.from(input.files || []);
+    if (!files.length) return;
+    status.textContent = `Lade ${files.length} Foto(s) hoch, bitte warten ...`;
+    try {
+      for (const file of files) {
+        await uploadGalleryPhoto(cat.id, file);
+      }
+      status.textContent = 'Fertig, danke fürs Teilen!';
+    } catch (err) {
+      console.error('Foto-Upload fehlgeschlagen:', err);
+      status.textContent = 'Upload leider fehlgeschlagen. Bitte nochmal versuchen.';
+    }
+    input.value = '';
+    await loadAndRenderGalleryPhotos(cat.id, grid);
+  });
+
+  loadAndRenderGalleryPhotos(cat.id, grid);
+  return wrap;
+}
+
+async function uploadGalleryPhoto(categoryId, file) {
+  const path = `photos/${categoryId}/${Date.now()}_${file.name}`;
+  const fileRef = storageRef(storage, path);
+  await uploadBytes(fileRef, file);
+  const url = await getDownloadURL(fileRef);
+  await addDoc(collection(db, 'photos'), {
+    categoryId,
+    url,
+    path,
+    guestName: (state.currentGuest && state.currentGuest.name) || 'Unbekannt',
+    uploadedAt: new Date().toISOString()
+  });
+}
+
+async function loadAndRenderGalleryPhotos(categoryId, grid) {
+  grid.innerHTML = '<p class="muted small">Fotos werden geladen ...</p>';
+  try {
+    const q = query(collection(db, 'photos'), where('categoryId', '==', categoryId), orderBy('uploadedAt', 'desc'));
+    const snap = await getDocs(q);
+    grid.innerHTML = '';
+    if (snap.empty) {
+      grid.innerHTML = '<p class="muted small">Noch keine Fotos hochgeladen. Sei die/der Erste!</p>';
+      return;
+    }
+    snap.docs.forEach(d => {
+      const data = d.data();
+      const img = document.createElement('img');
+      img.src = data.url;
+      img.alt = '';
+      img.loading = 'lazy';
+      grid.appendChild(img);
+    });
+  } catch (err) {
+    console.error('Fotos konnten nicht geladen werden:', err);
+    grid.innerHTML = '<p class="muted small">Fotos konnten nicht geladen werden. Ist Firebase Storage schon eingerichtet?</p>';
+  }
+}
+
 function renderCategories() {
   const list = $('#categories-list');
   list.innerHTML = '';
-  const filtered = state.categories.filter(c => TYPE_SECTION[c.type] === state.currentSection);
+  const filtered = state.categories.filter(c => c.sectionId === state.currentSection);
   if (filtered.length === 0) {
     list.innerHTML = '<p class="muted">Noch keine Inhalte in diesem Bereich.</p>';
     return;
@@ -726,15 +883,97 @@ $('#btn-reset-colors').addEventListener('click', resetColors);
 // Admin: Kategorien verwalten
 // ---------------------------------------------------------------
 async function loadAdminData() {
+  await loadSectionsAdmin();
   await loadCategoriesAdmin();
   await loadGuests();
   await loadAllResponses();
 }
 
+// ---------------------------------------------------------------
+// Admin: Bereiche verwalten
+// ---------------------------------------------------------------
+async function loadSectionsAdmin() {
+  await loadSections();
+  renderAdminSections();
+}
+
+function renderAdminSections() {
+  const wrap = $('#admin-sections-list');
+  wrap.innerHTML = '';
+  state.sections.forEach((sec, idx) => {
+    const catCount = state.categories.filter(c => c.sectionId === sec.id).length;
+    const el = document.createElement('div');
+    el.className = 'admin-cat-item';
+    el.innerHTML = `
+      <div class="admin-cat-item-header">
+        <button type="button" class="btn-icon-text" data-action="up">Hoch</button>
+        <button type="button" class="btn-icon-text" data-action="down">Runter</button>
+        <strong>${escapeHtml(sec.title)}</strong>
+        <button type="button" class="btn-icon-text" data-action="delete">Löschen</button>
+      </div>
+      <label>Titel</label>
+      <input type="text" data-field="title" value="${escapeHtml(sec.title)}">
+      <label>Beschreibung</label>
+      <textarea data-field="desc" rows="2">${escapeHtml(sec.desc || '')}</textarea>
+      <p class="muted small">${catCount} ${catCount === 1 ? 'Kategorie ist' : 'Kategorien sind'} diesem Bereich zugeordnet.</p>
+      <button class="btn btn-primary" data-action="save" style="margin-top:0.5rem;">Speichern</button>
+    `;
+    el.querySelector('[data-action="up"]').addEventListener('click', () => moveSection(idx, -1));
+    el.querySelector('[data-action="down"]').addEventListener('click', () => moveSection(idx, 1));
+    el.querySelector('[data-action="delete"]').addEventListener('click', () => deleteSection(sec.id, catCount));
+    el.querySelector('[data-action="save"]').addEventListener('click', () => {
+      const updated = {
+        title: el.querySelector('[data-field="title"]').value.trim(),
+        desc: el.querySelector('[data-field="desc"]').value.trim(),
+        order: sec.order || 0
+      };
+      saveSection(sec.id, updated);
+    });
+    wrap.appendChild(el);
+  });
+}
+
+async function saveSection(id, updated) {
+  await setDoc(doc(db, 'sections', id), updated);
+  await loadSectionsAdmin();
+  renderAdminCategories();
+}
+
+async function moveSection(idx, dir) {
+  const other = idx + dir;
+  if (other < 0 || other >= state.sections.length) return;
+  const a = state.sections[idx];
+  const b = state.sections[other];
+  await updateDoc(doc(db, 'sections', a.id), { order: b.order });
+  await updateDoc(doc(db, 'sections', b.id), { order: a.order });
+  await loadSectionsAdmin();
+}
+
+async function deleteSection(id, catCount) {
+  const msg = catCount > 0
+    ? `In diesem Bereich stecken noch ${catCount} Kategorie(n). Wirklich löschen? Die Kategorien bleiben erhalten, sind danach aber keinem Bereich mehr zugeordnet.`
+    : 'Diesen Bereich wirklich löschen?';
+  if (!confirm(msg)) return;
+  await deleteDoc(doc(db, 'sections', id));
+  await loadSectionsAdmin();
+}
+
+$('#btn-add-section').addEventListener('click', async () => {
+  const maxOrder = state.sections.reduce((m, s) => Math.max(m, s.order || 0), -1);
+  await addDoc(collection(db, 'sections'), { title: 'Neuer Bereich', desc: '', order: maxOrder + 1 });
+  await loadSectionsAdmin();
+});
+
+$('#btn-seed-sections').addEventListener('click', async () => {
+  if (!confirm('Standard-Bereiche einfügen? (Bestehende bleiben erhalten)')) return;
+  for (const s of DEFAULT_SECTIONS) {
+    await addDoc(collection(db, 'sections'), s);
+  }
+  await loadSectionsAdmin();
+});
+
 async function loadCategoriesAdmin() {
-  const q = query(collection(db, 'categories'), orderBy('order', 'asc'));
-  const snap = await getDocs(q);
-  state.categories = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  await fetchCategories();
   renderAdminCategories();
 }
 
@@ -753,13 +992,19 @@ function renderAdminCategories() {
       </div>
       <label>Titel</label>
       <input type="text" data-field="title" value="${escapeHtml(cat.title)}">
-      <label>Typ</label>
+      <label>Bereich (Ansicht für Gäste)</label>
+      <select data-field="sectionId">
+        <option value="" ${!state.sections.some(s => s.id === cat.sectionId) ? 'selected' : ''}>– Kein Bereich –</option>
+        ${state.sections.map(s => `<option value="${s.id}" ${cat.sectionId === s.id ? 'selected' : ''}>${escapeHtml(s.title)}</option>`).join('')}
+      </select>
+      <label>Typ (Darstellung)</label>
       <select data-field="type">
-        <option value="info" ${cat.type === 'info' ? 'selected' : ''}>Info-Text (Wichtige Infos)</option>
-        <option value="faq" ${cat.type === 'faq' ? 'selected' : ''}>Frage &amp; Antwort (Wichtige Infos)</option>
-        <option value="form" ${cat.type === 'form' ? 'selected' : ''}>Formular für Gäste (Auszufüllen)</option>
-        <option value="checklist" ${cat.type === 'checklist' ? 'selected' : ''}>Checkliste mit Fortschritt (Auszufüllen)</option>
-        <option value="day" ${cat.type === 'day' ? 'selected' : ''}>Tag im Tagesplan (Tagesplan)</option>
+        <option value="info" ${cat.type === 'info' ? 'selected' : ''}>Info-Text</option>
+        <option value="faq" ${cat.type === 'faq' ? 'selected' : ''}>Frage &amp; Antwort</option>
+        <option value="form" ${cat.type === 'form' ? 'selected' : ''}>Formular für Gäste</option>
+        <option value="checklist" ${cat.type === 'checklist' ? 'selected' : ''}>Checkliste mit Fortschritt</option>
+        <option value="day" ${cat.type === 'day' ? 'selected' : ''}>Tag im Tagesplan</option>
+        <option value="gallery" ${cat.type === 'gallery' ? 'selected' : ''}>Foto-Galerie zum Hochladen</option>
       </select>
 
       <div class="cat-block cat-block-info">
@@ -785,6 +1030,10 @@ function renderAdminCategories() {
         <button type="button" class="btn btn-secondary" data-action="add-item">Punkt hinzufügen</button>
       </div>
 
+      <div class="cat-block cat-block-gallery">
+        <p class="muted small">Für diesen Typ gibt es kein zusätzliches Formular: Gäste sehen direkt einen "Fotos hochladen"-Button sowie alle bisher hochgeladenen Fotos. Braucht Firebase Storage im Projekt (siehe README).</p>
+      </div>
+
       <label>Eigener Countdown (optional, Datum und Uhrzeit)</label>
       <input type="datetime-local" data-field="countdownTo" value="${cat.countdownTo || ''}">
 
@@ -799,6 +1048,7 @@ function renderAdminCategories() {
       el.querySelector('.cat-block-faq').style.display = type === 'faq' ? '' : 'none';
       el.querySelector('.cat-block-form').style.display = type === 'form' ? '' : 'none';
       el.querySelector('.cat-block-checklist').style.display = type === 'checklist' ? '' : 'none';
+      el.querySelector('.cat-block-gallery').style.display = type === 'gallery' ? '' : 'none';
     }
     updateBlocks(cat.type);
 
@@ -909,6 +1159,7 @@ function renderAdminCategories() {
       const updated = {
         title: el.querySelector('[data-field="title"]').value.trim(),
         type,
+        sectionId: el.querySelector('[data-field="sectionId"]').value,
         order: cat.order || 0,
         countdownTo: el.querySelector('[data-field="countdownTo"]').value,
         images: el.querySelector('[data-field="images"]').value.split('\n').map(s => s.trim()).filter(Boolean)
@@ -952,16 +1203,21 @@ async function deleteCategory(id) {
 
 $('#btn-add-category').addEventListener('click', async () => {
   const maxOrder = state.categories.reduce((m, c) => Math.max(m, c.order || 0), -1);
+  const defaultSectionId = state.sections[0] ? state.sections[0].id : '';
   await addDoc(collection(db, 'categories'), {
-    title: 'Neue Kategorie', type: 'info', content: '', images: [], order: maxOrder + 1, countdownTo: ''
+    title: 'Neue Kategorie', type: 'info', content: '', images: [], order: maxOrder + 1, countdownTo: '', sectionId: defaultSectionId
   });
   await loadCategoriesAdmin();
 });
 
 $('#btn-seed-categories').addEventListener('click', async () => {
   if (!confirm('Standard-Kategorien einfügen? (Bestehende bleiben erhalten)')) return;
+  const bySectionTitle = {};
+  state.sections.forEach(s => { bySectionTitle[s.title] = s.id; });
   for (const c of DEFAULT_CATEGORIES) {
-    await addDoc(collection(db, 'categories'), c);
+    const wantedTitle = LEGACY_TYPE_SECTION_TITLE[c.type];
+    const sectionId = (wantedTitle && bySectionTitle[wantedTitle]) || (state.sections[0] && state.sections[0].id) || '';
+    await addDoc(collection(db, 'categories'), { ...c, sectionId });
   }
   await loadCategoriesAdmin();
 });
@@ -1061,6 +1317,7 @@ $('#btn-export-csv').addEventListener('click', () => {
 (async function init() {
   await loadConfig();
   await loadGuests();
+  await loadSections();
   await loadCategories();
   startCountdowns();
   updateAdminButtonVisibility();
