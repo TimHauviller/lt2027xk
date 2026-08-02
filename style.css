@@ -70,10 +70,6 @@ h1, h2, h3 { font-family: 'Playfair Display', 'Georgia', serif; }
   display: block; width: 100%; border-radius: 4px;
   box-shadow: 0 10px 40px rgba(0,0,0,0.35); background: #000;
 }
-.intro-open-btn {
-  opacity: 0; transition: opacity 0.5s ease;
-}
-.intro-open-btn.show { opacity: 1; }
 
 /* ---------- Landing ---------- */
 #screen-landing {

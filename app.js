@@ -117,6 +117,10 @@ const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 function showScreen(id) {
   $$('.screen').forEach(s => s.classList.remove('active'));
   $(id).classList.add('active');
+  // Beim Wechsel auf einen neuen Screen (oder zurück) immer ganz oben
+  // starten, statt an der zuvor gescrollten Position des vorherigen
+  // Screens hängen zu bleiben.
+  window.scrollTo(0, 0);
 }
 
 // Vertauscht zwei benachbarte Einträge in einem lokalen Array (z.B. beim
@@ -1366,36 +1370,31 @@ function renderGuestSelect() {
 
 // ---------------------------------------------------------------
 // Intro-Video: spielt beim ersten Laden einmalig automatisch, danach
-// (oder falls Autoplay vom Browser blockiert wird) erscheint der
-// Button "Öffne die Einladung", der zur eigentlichen Startseite führt.
+// schaltet die App von selbst zur Startseite weiter - ganz ohne
+// Zutun des Gasts.
 // ---------------------------------------------------------------
 (function setupIntroVideo() {
   const introVideo = $('#intro-video');
-  const openBtn = $('#btn-open-invitation');
-  if (!introVideo || !openBtn) return;
+  if (!introVideo) return;
 
-  let revealed = false;
-  function revealOpenButton() {
-    if (revealed) return;
-    revealed = true;
-    openBtn.classList.remove('hidden');
-    requestAnimationFrame(() => openBtn.classList.add('show'));
+  let advanced = false;
+  function goToLanding() {
+    if (advanced) return;
+    advanced = true;
+    showScreen('#screen-landing');
   }
 
-  introVideo.addEventListener('ended', revealOpenButton);
-  // Falls Autoplay vom Browser verhindert wird, bleibt der Gast sonst auf
-  // einem stehenden Bild ohne Möglichkeit weiterzukommen - deshalb hier
-  // sofort den Button zeigen.
+  introVideo.addEventListener('ended', goToLanding);
+  // Falls Autoplay vom Browser verhindert wird oder das Video aus
+  // irgendeinem Grund nicht lädt, bliebe der Gast sonst auf einem
+  // stehenden Bild hängen - deshalb hier trotzdem weiterschalten.
   const playAttempt = introVideo.play();
   if (playAttempt && typeof playAttempt.catch === 'function') {
-    playAttempt.catch(() => revealOpenButton());
+    playAttempt.catch(() => goToLanding());
   }
   // Zusätzliches Sicherheitsnetz: spätestens kurz nach Video-Ende in jedem
-  // Fall den Button zeigen, auch wenn "ended" aus irgendeinem Grund nicht
-  // feuert.
-  setTimeout(revealOpenButton, 7000);
-
-  openBtn.addEventListener('click', () => showScreen('#screen-landing'));
+  // Fall weiterschalten, auch wenn "ended" aus irgendeinem Grund nicht feuert.
+  setTimeout(goToLanding, 7000);
 })();
 
 // ---------------------------------------------------------------
