@@ -459,9 +459,17 @@ function renderHub() {
           <span class="progress-label">${progress.pct}% erledigt (${progress.done}/${progress.total})</span>
         </div>`;
     }
+    const iconHtml = sec.iconUrl
+      ? `<img class="hub-card-icon" src="${escapeHtml(sec.iconUrl)}" alt="">`
+      : '';
     mainBtn.innerHTML = `
-      <h3>${escapeHtml(sec.title)}</h3>
-      <p class="muted small">${escapeHtml(sec.desc || '')}</p>
+      <div class="hub-card-title-row">
+        <div class="hub-card-title-text">
+          <h3>${escapeHtml(sec.title)}</h3>
+          <p class="muted small">${escapeHtml(sec.desc || '')}</p>
+        </div>
+        ${iconHtml}
+      </div>
       ${progressHtml}
     `;
     mainBtn.addEventListener('click', () => openSection(sec.id));
@@ -1405,6 +1413,8 @@ function buildSectionEditor(sec, opts) {
     <input type="text" data-field="title" value="${escapeHtml(sec.title || '')}">
     <label>Beschreibung</label>
     <textarea data-field="desc" rows="2">${escapeHtml(sec.desc || '')}</textarea>
+    <label>Icon (Bild-URL, optional - wird als kleines Symbol auf der Karte gezeigt)</label>
+    <input type="text" data-field="iconUrl" placeholder="https://..." value="${escapeHtml(sec.iconUrl || '')}">
     <p class="muted small">${catCount} ${catCount === 1 ? 'Kategorie ist' : 'Kategorien sind'} diesem Bereich zugeordnet.</p>
     <div class="admin-inline-actions">
       <button type="button" class="btn btn-primary" data-action="save">Speichern</button>
@@ -1432,10 +1442,16 @@ function buildSectionEditor(sec, opts) {
 
   const saveBtn = el.querySelector('[data-action="save"]');
   saveBtn.addEventListener('click', async () => {
+    // Den aktuellen "order"-Wert aus state.sections nehmen statt aus dem beim
+    // Öffnen des Editors erfassten (u.U. inzwischen veralteten) sec-Objekt -
+    // sonst könnte ein Speichern hier eine zwischenzeitliche Verschiebung
+    // (Hoch/Runter) versehentlich wieder rückgängig machen.
+    const current = state.sections.find(s => s.id === sec.id) || sec;
     const updated = {
       title: el.querySelector('[data-field="title"]').value.trim(),
       desc: el.querySelector('[data-field="desc"]').value.trim(),
-      order: sec.order || 0
+      iconUrl: el.querySelector('[data-field="iconUrl"]').value.trim(),
+      order: current.order || 0
     };
     const ok = await withSaveFeedback(saveBtn, () => saveSection(sec.id, updated));
     if (ok && opts.onSaved) await opts.onSaved({ id: sec.id, ...updated });
@@ -1890,11 +1906,14 @@ function buildCategoryEditor(cat, opts) {
     const saveBtn = el.querySelector('[data-action="save"]');
     saveBtn.addEventListener('click', async () => {
       const type = typeSelect.value;
+      // Aktuellen "order"-Wert nehmen statt aus dem beim Öffnen erfassten
+      // (u.U. inzwischen veralteten) cat-Objekt - siehe buildSectionEditor.
+      const currentCat = state.categories.find(c => c.id === cat.id) || cat;
       const updated = {
         title: el.querySelector('[data-field="title"]').value.trim(),
         type,
         sectionId: el.querySelector('[data-field="sectionId"]').value,
-        order: cat.order || 0,
+        order: currentCat.order || 0,
         countdownTo: el.querySelector('[data-field="countdownTo"]').value,
         images: el.querySelector('[data-field="images"]').value.split('\n').map(s => s.trim()).filter(Boolean)
       };

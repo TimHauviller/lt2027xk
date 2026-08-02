@@ -213,6 +213,12 @@ label { font-size: 0.85rem; color: var(--muted); display: block; margin-top: 0.5
   display: block; width: 100%; text-align: left; font-family: inherit;
   background: none; border: none; padding: 0; margin: 0; color: inherit; cursor: pointer;
 }
+.hub-card-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.85rem; }
+.hub-card-title-text { flex: 1; min-width: 0; }
+.hub-card-icon {
+  width: 52px; height: 52px; border-radius: 14px; object-fit: cover;
+  flex-shrink: 0; background: var(--cream); border: 1px solid var(--border);
+}
 .hub-card-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
 .hub-card-edit-btn { margin-top: 0; white-space: nowrap; }
 .hub-card-actions .btn-icon-text { white-space: nowrap; }
