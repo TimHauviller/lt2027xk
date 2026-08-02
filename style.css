@@ -59,6 +59,9 @@ h1, h2, h3 { font-family: 'Playfair Display', 'Georgia', serif; }
 
 /* ---------- Landing ---------- */
 #screen-landing {
+  display: none;
+}
+#screen-landing.active {
   display: flex;
   flex-direction: column;
   align-items: center;
