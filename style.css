@@ -149,19 +149,16 @@ h1, h2, h3 { font-family: 'Playfair Display', 'Georgia', serif; }
   .photo-strip img { width: 140px; height: 210px; }
 }
 
-/* Verlobungsvideo auf der Startseite - direkt unter dem Foto-Streifen,
-   im gleichen zentrierten Rahmen wie der restliche Landing-Inhalt. */
-.landing-video { max-width: 480px; margin: 0 auto; padding: 0.5rem 1.5rem 0; }
+/* Verlobungsvideo auf der Startseite - unterhalb von Countdown und
+   "Los geht's", im gleichen zentrierten Rahmen wie der restliche
+   Landing-Inhalt. */
+.landing-video { max-width: 480px; margin: 0 auto; padding: 0 1.5rem 2rem; }
 .landing-video video {
   display: block; width: 100%; border-radius: 12px;
   box-shadow: 0 2px 10px rgba(63,0,19,0.18); background: #000;
 }
-.landing-video-caption {
-  text-align: center; margin: 0.6rem 0 0; font-size: 0.85rem;
-  color: var(--muted); font-style: italic;
-}
 
-.landing-content { padding: 1.5rem 1.5rem 2.5rem; max-width: 480px; }
+.landing-content { padding: 1.5rem 1.5rem 1rem; max-width: 480px; }
 #landing-subtitle { font-size: 1.2rem; margin: 0 0 1.5rem; color: var(--grape); }
 
 .countdown { display: flex; gap: 0.75rem; justify-content: center; margin-bottom: 2rem; }
