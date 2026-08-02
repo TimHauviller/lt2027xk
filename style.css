@@ -194,6 +194,9 @@ label { font-size: 0.85rem; color: var(--muted); display: block; margin-top: 0.5
 .hub-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(63,0,19,0.10); }
 .hub-card h3 { margin: 0 0 0.3rem; color: var(--sage-dark); }
 .hub-card p { margin: 0.15rem 0; }
+.hub-card--todo { border: 1px solid var(--terracotta); border-left-width: 6px; }
+.hub-card--todo h3 { color: var(--blood-orange); }
+.hub-card--todo .progress-bar { background: rgba(171, 72, 45, 0.18); }
 
 /* ---------- Progress bar (Checklisten & Übersicht) ---------- */
 .progress-wrap { margin-top: 0.75rem; }
@@ -204,14 +207,15 @@ label { font-size: 0.85rem; color: var(--muted); display: block; margin-top: 0.5
 /* ---------- Main / Section screen ---------- */
 .main-header {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 1.25rem 1.5rem; background: #fff; border-bottom: 1px solid var(--border);
-  position: sticky; top: 0; z-index: 5; gap: 1rem; flex-wrap: wrap;
+  padding: 0.6rem 1.25rem; background: #fff; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 30; gap: 1rem; flex-wrap: wrap;
 }
-.main-header h1 { margin: 0; font-size: 1.4rem; color: var(--sage-dark); }
-.header-right { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.main-header h1 { margin: 0; font-size: 1.05rem; color: var(--sage-dark); }
+.main-header p { margin: 0; font-size: 0.8rem; }
+.header-right { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
 .mini-countdown {
-  background: var(--sage); color: #fff; padding: 0.4rem 0.8rem;
-  border-radius: 999px; font-size: 0.85rem; white-space: nowrap;
+  background: var(--sage); color: #fff; padding: 0.3rem 0.65rem;
+  border-radius: 999px; font-size: 0.75rem; white-space: nowrap;
 }
 
 .categories-list { padding: 1.25rem; max-width: 640px; margin: 0 auto; }

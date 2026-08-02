@@ -17,11 +17,11 @@ const auth = getAuth(app);
 // der dem Gast im Übersichts-Fenster (Hub) zur Auswahl angeboten wird.
 // ---------------------------------------------------------------
 const SECTIONS = [
-  { key: 'infos', title: 'Wichtige Infos', desc: 'Alles Wichtige rund um die Hochzeit.' },
-  { key: 'faq', title: 'Häufig gestellte Fragen', desc: 'Antworten auf die Fragen, die uns am häufigsten gestellt werden.' },
-  { key: 'todo', title: 'Noch auszufüllen', desc: 'Eure persönlichen Angaben zu Essen, Kleidung und mehr.' }
+  { key: 'infos', title: 'Wichtige Infos', desc: 'Alles Wichtige rund um die Hochzeit, inklusive häufig gestellter Fragen.' },
+  { key: 'todo', title: 'Noch auszufüllen', desc: 'Eure persönlichen Angaben zu Essen, Kleidung und mehr.' },
+  { key: 'tagesplan', title: 'Tagesplan', desc: 'Der Ablauf der einzelnen Tage.' }
 ];
-const TYPE_SECTION = { info: 'infos', faq: 'faq', form: 'todo', checklist: 'todo' };
+const TYPE_SECTION = { info: 'infos', faq: 'infos', form: 'todo', checklist: 'todo', day: 'tagesplan' };
 
 // ---------------------------------------------------------------
 // Default (Beispiel-)Kategorien, die der Admin per Knopfdruck einfügen kann
@@ -52,7 +52,7 @@ const DEFAULT_CATEGORIES = [
     ] },
   { title: "Essen & Getränke", type: "form", order: 10, images: [],
     fields: [
-      { key: "ernaehrung", label: "Ernährung", type: "select", options: ["Fleisch", "Vegetarisch", "Vegan"] },
+      { key: "ernaehrung", label: "Ernährung", type: "select", options: ["Fleisch", "Vegetarisch"] },
       { key: "allergien", label: "Allergien / Unverträglichkeiten", type: "textarea" },
       { key: "getraenke", label: "Wunschgetränke", type: "text" }
     ] },
@@ -62,7 +62,11 @@ const DEFAULT_CATEGORIES = [
       { key: "anreise", label: "Anreise gebucht" },
       { key: "geschenk", label: "Geschenk überlegt" },
       { key: "rsvp", label: "Zusage abgegeben" }
-    ] }
+    ] },
+  { title: "Tag 1", type: "day", order: 12, images: [],
+    content: "Anreise der Gäste. Details zum Ablauf folgen." },
+  { title: "Tag 2", type: "day", order: 13, images: [],
+    content: "Trauung und Feier. Details zum Ablauf folgen." }
 ];
 
 // ---------------------------------------------------------------
@@ -292,7 +296,7 @@ function renderHub() {
     const count = state.categories.filter(c => TYPE_SECTION[c.type] === sec.key).length;
     const card = document.createElement('button');
     card.type = 'button';
-    card.className = 'hub-card';
+    card.className = 'hub-card' + (sec.key === 'todo' ? ' hub-card--todo' : '');
     let progressHtml = '';
     if (sec.key === 'todo' && progress.total > 0) {
       progressHtml = `
@@ -316,7 +320,25 @@ function enterHub() {
   $('#hub-title').textContent = (state.config && state.config.title) || 'Lucie & Timmy';
   $('#hub-greeting').textContent = state.currentGuest ? `Hallo, ${state.currentGuest.name}!` : '';
   renderHub();
+  updateAdminButtonVisibility();
   showScreen('#screen-hub');
+}
+
+// ---------------------------------------------------------------
+// Admin-Zugang nur für die Personen sichtbar, die ihn brauchen.
+// Wer bereits eingeloggt ist, sieht den Button immer (damit man
+// jederzeit zurück in den Admin-Bereich kommt).
+// ---------------------------------------------------------------
+const ADMIN_VISIBLE_FOR = ['tim hauviller'];
+function updateAdminButtonVisibility() {
+  const name = ((state.currentGuest && state.currentGuest.name) || '').trim().toLowerCase();
+  const allowed = ADMIN_VISIBLE_FOR.some(n => name === n || name.includes(n));
+  const btn = $('#btn-open-admin');
+  if (state.isAdmin || allowed) {
+    btn.classList.remove('hidden');
+  } else {
+    btn.classList.add('hidden');
+  }
 }
 
 function openSection(sectionKey) {
@@ -616,6 +638,7 @@ $('#btn-guest-continue').addEventListener('click', async () => {
 $('#btn-hub-switch-guest').addEventListener('click', () => {
   state.currentGuest = null;
   localStorage.removeItem('hz_guest');
+  updateAdminButtonVisibility();
   showScreen('#screen-guest');
 });
 
@@ -641,8 +664,13 @@ async function loadResponsesForCurrentGuest() {
 // ---------------------------------------------------------------
 // Admin: Login
 // ---------------------------------------------------------------
-$('#btn-open-admin').addEventListener('click', () => {
-  $('#admin-login-modal').classList.remove('hidden');
+$('#btn-open-admin').addEventListener('click', async () => {
+  if (state.isAdmin) {
+    await loadAdminData();
+    showScreen('#screen-admin');
+  } else {
+    $('#admin-login-modal').classList.remove('hidden');
+  }
 });
 $('#btn-admin-login-cancel').addEventListener('click', () => {
   $('#admin-login-modal').classList.add('hidden');
@@ -671,6 +699,7 @@ $('#btn-admin-back').addEventListener('click', () => {
 
 onAuthStateChanged(auth, async (user) => {
   state.isAdmin = !!user;
+  updateAdminButtonVisibility();
   if (user) {
     await loadAdminData();
     showScreen('#screen-admin');
@@ -727,9 +756,10 @@ function renderAdminCategories() {
       <label>Typ</label>
       <select data-field="type">
         <option value="info" ${cat.type === 'info' ? 'selected' : ''}>Info-Text (Wichtige Infos)</option>
-        <option value="faq" ${cat.type === 'faq' ? 'selected' : ''}>Frage &amp; Antwort (FAQ)</option>
+        <option value="faq" ${cat.type === 'faq' ? 'selected' : ''}>Frage &amp; Antwort (Wichtige Infos)</option>
         <option value="form" ${cat.type === 'form' ? 'selected' : ''}>Formular für Gäste (Auszufüllen)</option>
         <option value="checklist" ${cat.type === 'checklist' ? 'selected' : ''}>Checkliste mit Fortschritt (Auszufüllen)</option>
+        <option value="day" ${cat.type === 'day' ? 'selected' : ''}>Tag im Tagesplan (Tagesplan)</option>
       </select>
 
       <div class="cat-block cat-block-info">
@@ -765,7 +795,7 @@ function renderAdminCategories() {
     `;
 
     function updateBlocks(type) {
-      el.querySelector('.cat-block-info').style.display = type === 'info' ? '' : 'none';
+      el.querySelector('.cat-block-info').style.display = (type === 'info' || type === 'day') ? '' : 'none';
       el.querySelector('.cat-block-faq').style.display = type === 'faq' ? '' : 'none';
       el.querySelector('.cat-block-form').style.display = type === 'form' ? '' : 'none';
       el.querySelector('.cat-block-checklist').style.display = type === 'checklist' ? '' : 'none';
@@ -883,7 +913,7 @@ function renderAdminCategories() {
         countdownTo: el.querySelector('[data-field="countdownTo"]').value,
         images: el.querySelector('[data-field="images"]').value.split('\n').map(s => s.trim()).filter(Boolean)
       };
-      if (type === 'info') {
+      if (type === 'info' || type === 'day') {
         updated.content = el.querySelector('[data-field="content"]').value;
       } else if (type === 'faq') {
         updated.qna = localQna.filter(q => (q.question || '').trim() && (q.answer || '').trim());
@@ -1033,6 +1063,7 @@ $('#btn-export-csv').addEventListener('click', () => {
   await loadGuests();
   await loadCategories();
   startCountdowns();
+  updateAdminButtonVisibility();
   if (state.currentGuest) {
     await loadResponsesForCurrentGuest();
   }
