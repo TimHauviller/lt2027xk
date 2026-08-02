@@ -19,8 +19,8 @@ const auth = getAuth(app);
 // Upload -> Upload presets -> Unsigned). Bis diese Werte eingetragen sind,
 // zeigt die Foto-Galerie einen Hinweis statt eines Fehlers an.
 // ---------------------------------------------------------------
-const CLOUDINARY_CLOUD_NAME = 'DEIN_CLOUD_NAME';
-const CLOUDINARY_UPLOAD_PRESET = 'DEIN_UPLOAD_PRESET';
+const CLOUDINARY_CLOUD_NAME = 'g0obb6vj';
+const CLOUDINARY_UPLOAD_PRESET = 'hochzeit_gaeste_upload';
 
 // ---------------------------------------------------------------
 // Bereiche: die Ansichten, zwischen denen Gäste im Übersichts-Fenster
