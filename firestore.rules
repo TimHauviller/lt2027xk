@@ -1,0 +1,38 @@
+rules_version = '2';
+
+// Firestore-Sicherheitsregeln für die Hochzeits-App.
+// Einfaches Modell, passend für eine private Familien-/Freundes-App:
+// - config, categories, guests: von allen lesbar (nötig für die Startseite & Kategorien),
+//   aber nur von eingeloggten Admins (Lucie & Timmy) änderbar.
+// - responses: von allen Gästen anlegbar/änderbar (sie tragen dort ihre eigenen Angaben ein),
+//   aber nur von Admins lesbar und löschbar.
+//
+// Hinweis: Das ist bewusst simpel gehalten (kein Fein-Schutz pro einzelnem Gast-Dokument),
+// ausreichend für eine private Hochzeits-Seite mit "geheimem Link". Für höhere Sicherheit
+// könnte man später z. B. auch Gäste per Firebase Auth anonym einloggen lassen.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    match /categories/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    match /guests/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    match /responses/{docId} {
+      allow read: if request.auth != null;
+      allow create, update: if true;
+      allow delete: if request.auth != null;
+    }
+  }
+}

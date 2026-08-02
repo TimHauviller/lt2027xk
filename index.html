@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lucie & Timmy – Unsere Hochzeit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Parisienne&family=Cormorant+Garamond:wght@400;500;600&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ===================== LANDING SCREEN ===================== -->
+<section id="screen-landing" class="screen active">
+  <nav class="landing-nav"><span class="nav-brand">L &amp; T</span></nav>
+
+  <div class="hero" id="landing-photo">
+    <div class="hero-overlay">
+      <p class="script-tag">Save the Date</p>
+      <h1 id="landing-title">Lucie &amp; Timmy</h1>
+      <p id="landing-intro">9. – 13. Mai 2027 · Toskana, Italien</p>
+    </div>
+  </div>
+
+  <div class="marquee"><div class="marquee-track" id="marquee-track"></div></div>
+
+  <img class="villa-sketch" src="villa-illustration.jpg" alt="Illustration der Location in der Toskana">
+
+  <div class="landing-content">
+    <p id="landing-subtitle">Wir heiraten in der Toskana, Italien 🇮🇹</p>
+    <div class="countdown" id="landing-countdown">
+      <div class="countdown-box"><span id="cd-days">–</span><small>Tage</small></div>
+      <div class="countdown-box"><span id="cd-hours">–</span><small>Std</small></div>
+      <div class="countdown-box"><span id="cd-minutes">–</span><small>Min</small></div>
+      <div class="countdown-box"><span id="cd-seconds">–</span><small>Sek</small></div>
+    </div>
+    <button id="btn-enter" class="btn btn-primary">Los geht's</button>
+  </div>
+</section>
+
+<!-- ===================== GUEST SELECT SCREEN ===================== -->
+<section id="screen-guest" class="screen">
+  <div class="card">
+    <h2>Wer bist du?</h2>
+    <p class="muted">Wähle deinen Namen aus der Liste.</p>
+    <select id="guest-select">
+      <option value="">– Bitte auswählen –</option>
+    </select>
+    <button id="btn-guest-continue" class="btn btn-primary" disabled>Weiter</button>
+    <p class="muted small">Du findest dich nicht in der Liste? Meld dich bei Lucie & Timmy.</p>
+  </div>
+</section>
+
+<!-- ===================== MAIN SCREEN ===================== -->
+<section id="screen-main" class="screen">
+  <header class="main-header">
+    <div>
+      <h1 id="main-title">Lucie & Timmy</h1>
+      <p id="main-greeting" class="muted"></p>
+    </div>
+    <div class="header-right">
+      <div class="mini-countdown" id="mini-countdown">– Tage</div>
+      <button id="btn-switch-guest" class="link-btn">Nicht du?</button>
+    </div>
+  </header>
+
+  <div id="categories-list" class="categories-list"></div>
+
+  <footer class="app-footer">
+    <button id="btn-open-admin" class="admin-corner-btn">⚙</button>
+  </footer>
+</section>
+
+<!-- ===================== ADMIN LOGIN MODAL ===================== -->
+<div id="admin-login-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3>Admin-Login</h3>
+    <input type="email" id="admin-email" placeholder="E-Mail">
+    <input type="password" id="admin-password" placeholder="Passwort">
+    <p id="admin-login-error" class="error-text hidden"></p>
+    <div class="modal-actions">
+      <button id="btn-admin-login-cancel" class="btn btn-secondary">Abbrechen</button>
+      <button id="btn-admin-login-submit" class="btn btn-primary">Anmelden</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== ADMIN SCREEN ===================== -->
+<section id="screen-admin" class="screen">
+  <header class="main-header">
+    <h1>Admin-Bereich</h1>
+    <div class="header-right">
+      <button id="btn-admin-logout" class="link-btn">Abmelden</button>
+      <button id="btn-admin-back" class="link-btn">Zur App</button>
+    </div>
+  </header>
+
+  <nav class="admin-tabs">
+    <button class="admin-tab active" data-tab="landing">Startseite</button>
+    <button class="admin-tab" data-tab="categories">Kategorien</button>
+    <button class="admin-tab" data-tab="guests">Gästeliste</button>
+    <button class="admin-tab" data-tab="responses">Antworten</button>
+  </nav>
+
+  <!-- Startseite -->
+  <div class="admin-panel active" id="admin-panel-landing">
+    <div class="card">
+      <label>Titel</label>
+      <input type="text" id="cfg-title">
+      <label>Untertitel</label>
+      <input type="text" id="cfg-subtitle">
+      <label>Info-Text (Datum/Ort)</label>
+      <input type="text" id="cfg-intro">
+      <label>Foto-URL</label>
+      <input type="text" id="cfg-photo" placeholder="https://...">
+      <label>Hochzeitsbeginn (Countdown-Ziel)</label>
+      <input type="date" id="cfg-start">
+      <label>Hochzeitsende</label>
+      <input type="date" id="cfg-end">
+      <button id="btn-save-config" class="btn btn-primary">Speichern</button>
+      <p id="config-saved-msg" class="success-text hidden">Gespeichert ✓</p>
+    </div>
+  </div>
+
+  <!-- Kategorien -->
+  <div class="admin-panel" id="admin-panel-categories">
+    <div class="card">
+      <button id="btn-seed-categories" class="btn btn-secondary">Standard-Kategorien einfügen</button>
+      <button id="btn-add-category" class="btn btn-primary">+ Neue Kategorie</button>
+    </div>
+    <div id="admin-categories-list"></div>
+  </div>
+
+  <!-- Gästeliste -->
+  <div class="admin-panel" id="admin-panel-guests">
+    <div class="card">
+      <h3>Neuen Gast hinzufügen</h3>
+      <input type="text" id="new-guest-name" placeholder="Name des Gastes">
+      <button id="btn-add-guest" class="btn btn-primary">Hinzufügen</button>
+    </div>
+    <div id="admin-guests-list" class="card"></div>
+  </div>
+
+  <!-- Antworten -->
+  <div class="admin-panel" id="admin-panel-responses">
+    <div class="card">
+      <button id="btn-export-csv" class="btn btn-secondary">Als CSV exportieren</button>
+    </div>
+    <div id="admin-responses-list"></div>
+  </div>
+</section>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
