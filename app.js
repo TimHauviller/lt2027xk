@@ -691,13 +691,23 @@ async function saveGuestChecklist(categoryId, checkedIds) {
   if (!state.currentGuest) return;
   try {
     const ref = doc(db, 'responses', state.currentGuest.id);
-    const snap = await getDoc(ref);
-    const data = snap.exists() ? snap.data() : { guestName: state.currentGuest.name, answers: {}, checklist: {} };
-    data.checklist = data.checklist || {};
-    data.checklist[categoryId] = checkedIds;
-    data.guestName = state.currentGuest.name;
-    data.updatedAt = new Date().toISOString();
-    await setDoc(ref, data);
+    // Gleicher Grund wie bei saveGuestAnswer: gezielt per Punkt-Pfad
+    // schreiben statt lesen+komplett-neu-schreiben, damit schnell
+    // hintereinander angeklickte Haken sich nicht gegenseitig überschreiben.
+    const updatePayload = {
+      [`checklist.${categoryId}`]: checkedIds,
+      guestName: state.currentGuest.name,
+      updatedAt: new Date().toISOString()
+    };
+    try {
+      await updateDoc(ref, updatePayload);
+    } catch (updateErr) {
+      await setDoc(ref, {
+        guestName: state.currentGuest.name,
+        checklist: { [categoryId]: checkedIds },
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    }
   } catch (err) {
     console.error('Fortschritt konnte nicht gespeichert werden:', err);
     alert('Dein Fortschritt konnte leider nicht gespeichert werden. Bitte versuch es gleich nochmal.');
@@ -846,13 +856,28 @@ async function saveGuestAnswer(categoryId, key, value) {
   if (!state.currentGuest) return;
   try {
     const ref = doc(db, 'responses', state.currentGuest.id);
-    const snap = await getDoc(ref);
-    const data = snap.exists() ? snap.data() : { guestName: state.currentGuest.name, answers: {} };
-    data.answers = data.answers || {};
-    data.answers[categoryId] = { ...(data.answers[categoryId] || {}), [key]: value };
-    data.guestName = state.currentGuest.name;
-    data.updatedAt = new Date().toISOString();
-    await setDoc(ref, data);
+    // Wichtig: gezielt nur dieses eine Feld per Punkt-Pfad aktualisieren,
+    // statt das ganze Dokument zu lesen und komplett neu zu schreiben. Beim
+    // "Lesen, ändern, komplett neu schreiben"-Muster gingen Antworten
+    // verloren, wenn z.B. bei einer Mehrfachauswahl mehrere Haken kurz
+    // hintereinander gesetzt wurden (jeder Klick löste einen eigenen
+    // Speichervorgang aus, und der zuletzt fertige überschrieb dabei die
+    // Änderungen der anderen, noch laufenden Speichervorgänge).
+    const updatePayload = {
+      [`answers.${categoryId}.${key}`]: value,
+      guestName: state.currentGuest.name,
+      updatedAt: new Date().toISOString()
+    };
+    try {
+      await updateDoc(ref, updatePayload);
+    } catch (updateErr) {
+      // Dokument existiert für diesen Gast noch nicht - einmalig anlegen.
+      await setDoc(ref, {
+        guestName: state.currentGuest.name,
+        answers: { [categoryId]: { [key]: value } },
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    }
   } catch (err) {
     console.error('Antwort konnte nicht gespeichert werden:', err);
     alert('Deine Angabe konnte leider nicht gespeichert werden. Bitte versuch es gleich nochmal.');
