@@ -610,11 +610,20 @@ function renderImages(images) {
   const gal = document.createElement('div');
   gal.className = 'image-gallery';
   images.forEach(url => {
+    // Bild komplett und unbeschnitten zeigen (kein Zuschneiden), und als Link
+    // auf die Originaldatei - so öffnet ein Tippen/Klicken das Bild in voller
+    // Auflösung in einem eigenen Tab, wo man mit den üblichen Handy-Gesten
+    // reinzoomen kann.
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener';
     const img = document.createElement('img');
     img.src = url;
     img.alt = '';
     img.loading = 'lazy';
-    gal.appendChild(img);
+    link.appendChild(img);
+    gal.appendChild(link);
   });
   return gal;
 }
@@ -979,13 +988,26 @@ function renderGalleryUpload(cat) {
 }
 
 async function uploadGalleryPhoto(categoryId, file) {
+  const url = await uploadImageToCloudinary(file, `hochzeit/${categoryId}`);
+  await addDoc(collection(db, 'photos'), {
+    categoryId,
+    url,
+    path: `${Date.now()}_${file.name}`,
+    guestName: (state.currentGuest && state.currentGuest.name) || 'Unbekannt',
+    uploadedAt: new Date().toISOString()
+  });
+}
+
+// Generischer Cloudinary-Bild-Upload (Foto-Galerie der Gäste UND
+// Admin-Icons für Bereiche nutzen diese eine Funktion).
+async function uploadImageToCloudinary(file, folder) {
   if (CLOUDINARY_CLOUD_NAME === 'DEIN_CLOUD_NAME') {
     throw new Error('Cloudinary ist noch nicht eingerichtet.');
   }
   const formData = new FormData();
   formData.append('file', file);
   formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-  formData.append('folder', `hochzeit/${categoryId}`);
+  if (folder) formData.append('folder', folder);
   const resp = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
     method: 'POST',
     body: formData
@@ -994,13 +1016,7 @@ async function uploadGalleryPhoto(categoryId, file) {
     throw new Error(`Cloudinary-Upload fehlgeschlagen (${resp.status})`);
   }
   const data = await resp.json();
-  await addDoc(collection(db, 'photos'), {
-    categoryId,
-    url: data.secure_url,
-    path: `${Date.now()}_${file.name}`,
-    guestName: (state.currentGuest && state.currentGuest.name) || 'Unbekannt',
-    uploadedAt: new Date().toISOString()
-  });
+  return data.secure_url;
 }
 
 async function downloadPhoto(url, filename) {
@@ -1416,8 +1432,13 @@ function buildSectionEditor(sec, opts) {
     <input type="text" data-field="title" value="${escapeHtml(sec.title || '')}">
     <label>Beschreibung</label>
     <textarea data-field="desc" rows="2">${escapeHtml(sec.desc || '')}</textarea>
-    <label>Icon (Bild-URL, optional - wird als kleines Symbol auf der Karte gezeigt)</label>
+    <label>Icon (optional - wird als kleines Symbol auf der Karte gezeigt)</label>
     <input type="text" data-field="iconUrl" placeholder="https://..." value="${escapeHtml(sec.iconUrl || '')}">
+    <div class="icon-upload-row">
+      <input type="file" accept="image/*" data-field="iconFile" style="display:none">
+      <button type="button" class="btn-icon-text btn-small" data-action="pick-icon-photo">Aus Fotos wählen</button>
+      <span class="muted small" data-icon-upload-status></span>
+    </div>
     <p class="muted small">${catCount} ${catCount === 1 ? 'Kategorie ist' : 'Kategorien sind'} diesem Bereich zugeordnet.</p>
     <div class="admin-inline-actions">
       <button type="button" class="btn btn-primary" data-action="save">Speichern</button>
@@ -1442,6 +1463,28 @@ function buildSectionEditor(sec, opts) {
   if (opts.onCancel) {
     el.querySelector('[data-action="cancel"]').addEventListener('click', () => opts.onCancel());
   }
+
+  // "Aus Fotos wählen" - öffnet auf dem Handy direkt die Fotomediathek (bzw.
+  // den Datei-Dialog am Rechner), lädt das gewählte Bild zu Cloudinary hoch
+  // und trägt die resultierende URL automatisch ins Icon-Feld ein.
+  const iconFileInput = el.querySelector('[data-field="iconFile"]');
+  const iconUrlInput = el.querySelector('[data-field="iconUrl"]');
+  const iconUploadStatus = el.querySelector('[data-icon-upload-status]');
+  el.querySelector('[data-action="pick-icon-photo"]').addEventListener('click', () => iconFileInput.click());
+  iconFileInput.addEventListener('change', async () => {
+    const file = iconFileInput.files && iconFileInput.files[0];
+    if (!file) return;
+    iconUploadStatus.textContent = 'Lädt hoch ...';
+    try {
+      const url = await uploadImageToCloudinary(file, `hochzeit/section-icons/${sec.id || 'new'}`);
+      iconUrlInput.value = url;
+      iconUploadStatus.textContent = 'Hochgeladen! Nicht vergessen: unten auf Speichern klicken.';
+    } catch (err) {
+      console.error('Icon-Upload fehlgeschlagen:', err);
+      iconUploadStatus.textContent = 'Hochladen hat leider nicht geklappt. Bitte nochmal versuchen.';
+    }
+    iconFileInput.value = '';
+  });
 
   const saveBtn = el.querySelector('[data-action="save"]');
   saveBtn.addEventListener('click', async () => {
