@@ -1118,8 +1118,11 @@ function renderCategories() {
   }
   filtered.forEach((cat, idx) => {
     // Die Foto-Galerie muss nicht erst aufgeklappt werden - Gäste sollen den
-    // Upload-Knopf und bereits hochgeladene Fotos sofort sehen.
-    const isFlat = cat.type === 'gallery';
+    // Upload-Knopf und bereits hochgeladene Fotos sofort sehen. Zusätzlich
+    // kann jede Kategorie einzeln über "Immer geöffnet" auf dasselbe
+    // Verhalten umgestellt werden (z.B. für Text, der direkt als
+    // Fließtext sichtbar sein soll, ohne erst aufgeklappt werden zu müssen).
+    const isFlat = cat.type === 'gallery' || !!cat.alwaysOpen;
     const el = document.createElement('div');
     el.className = 'category' + (isFlat ? ' category--flat open' : '');
     el.innerHTML = `
@@ -1618,6 +1621,11 @@ function buildCategoryEditor(cat, opts) {
       <label>Bilder (eine Bild-URL pro Zeile, optional)</label>
       <textarea data-field="images" rows="2" placeholder="https://...">${escapeHtml((cat.images || []).join('\n'))}</textarea>
 
+      <label class="checkbox-label">
+        <input type="checkbox" data-field="alwaysOpen" ${cat.alwaysOpen ? 'checked' : ''}>
+        Immer geöffnet zeigen (nicht erst aufklappbar - Inhalt steht direkt sichtbar da)
+      </label>
+
       <div class="admin-inline-actions">
         <button type="button" class="btn btn-primary" data-action="save">Speichern</button>
         ${opts.onCancel ? '<button type="button" class="btn btn-secondary" data-action="cancel">Abbrechen</button>' : ''}
@@ -1915,7 +1923,8 @@ function buildCategoryEditor(cat, opts) {
         sectionId: el.querySelector('[data-field="sectionId"]').value,
         order: currentCat.order || 0,
         countdownTo: el.querySelector('[data-field="countdownTo"]').value,
-        images: el.querySelector('[data-field="images"]').value.split('\n').map(s => s.trim()).filter(Boolean)
+        images: el.querySelector('[data-field="images"]').value.split('\n').map(s => s.trim()).filter(Boolean),
+        alwaysOpen: el.querySelector('[data-field="alwaysOpen"]').checked
       };
       if (type === 'info' || type === 'day') {
         updated.content = el.querySelector('[data-field="content"]').value;

@@ -412,6 +412,8 @@ label { font-size: 0.85rem; color: var(--muted); display: block; margin-top: 0.5
 /* Inline-Bearbeiten direkt auf den Gast-Seiten (nur im Admin-Modus sichtbar) */
 .admin-cat-item--inline { border-color: var(--terracotta); }
 .admin-inline-actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; }
+.checkbox-label { display: flex; align-items: center; gap: 0.5rem; font-weight: normal; margin-top: 0.6rem; }
+.checkbox-label input[type=checkbox] { width: 17px; height: 17px; flex-shrink: 0; }
 .admin-inline-add { margin-top: 1rem; text-align: center; }
 
 /* Speichern-Feedback direkt am Button, statt eines stillen Fehlschlags */
