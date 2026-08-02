@@ -224,8 +224,11 @@ label { font-size: 0.85rem; color: var(--muted); display: block; margin-top: 0.5
 }
 .hub-card-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.85rem; }
 .hub-card-title-text { flex: 1; min-width: 0; }
+/* Icons deutlich größer und bei allen Karten exakt gleich groß (fixe
+   Box + object-fit:cover), damit unterschiedliche Quellbilder nicht
+   unterschiedlich groß wirken. */
 .hub-card-icon {
-  width: 52px; height: 52px; border-radius: 14px; object-fit: cover;
+  width: 108px; height: 108px; border-radius: 20px; object-fit: cover;
   flex-shrink: 0; background: var(--cream); border: 1px solid var(--border);
 }
 .hub-card-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
