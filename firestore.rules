@@ -4,12 +4,16 @@ rules_version = '2';
 // Einfaches Modell, passend für eine private Familien-/Freundes-App:
 // - config, categories, guests: von allen lesbar (nötig für die Startseite & Kategorien),
 //   aber nur von eingeloggten Admins (Lucie & Timmy) änderbar.
-// - responses: von allen Gästen anlegbar/änderbar (sie tragen dort ihre eigenen Angaben ein),
-//   aber nur von Admins lesbar und löschbar.
+// - responses: jeder Gast darf sein eigenes Antwort-Dokument anlegen/ändern und per
+//   direktem Dokument-Zugriff (get) lesen, damit eigene Angaben beim erneuten Öffnen
+//   der Seite vorausgefüllt sind. Das komplette Auflisten aller Antworten (list, z.B.
+//   für den Admin-Tab "Antworten" und den CSV-Export) bleibt nur eingeloggten Admins
+//   vorbehalten, damit Gäste nicht die Angaben anderer Gäste einsehen können.
 //
-// Hinweis: Das ist bewusst simpel gehalten (kein Fein-Schutz pro einzelnem Gast-Dokument),
-// ausreichend für eine private Hochzeits-Seite mit "geheimem Link". Für höhere Sicherheit
-// könnte man später z. B. auch Gäste per Firebase Auth anonym einloggen lassen.
+// Hinweis: Das ist bewusst simpel gehalten (kein Fein-Schutz pro einzelnem Gast-Dokument
+// über eine eigene Gast-Anmeldung), ausreichend für eine private Hochzeits-Seite mit
+// "geheimem Link". Ein Gast könnte nur dann die Antwort eines anderen Gastes lesen, wenn
+// er dessen zufällig generierte Dokument-ID kennt.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -30,7 +34,8 @@ service cloud.firestore {
     }
 
     match /responses/{docId} {
-      allow read: if request.auth != null;
+      allow get: if true;
+      allow list: if request.auth != null;
       allow create, update: if true;
       allow delete: if request.auth != null;
     }

@@ -382,14 +382,19 @@ function getGuestChecklist(catId) {
 
 async function saveGuestChecklist(categoryId, checkedIds) {
   if (!state.currentGuest) return;
-  const ref = doc(db, 'responses', state.currentGuest.id);
-  const snap = await getDoc(ref);
-  const data = snap.exists() ? snap.data() : { guestName: state.currentGuest.name, answers: {}, checklist: {} };
-  data.checklist = data.checklist || {};
-  data.checklist[categoryId] = checkedIds;
-  data.guestName = state.currentGuest.name;
-  data.updatedAt = new Date().toISOString();
-  await setDoc(ref, data);
+  try {
+    const ref = doc(db, 'responses', state.currentGuest.id);
+    const snap = await getDoc(ref);
+    const data = snap.exists() ? snap.data() : { guestName: state.currentGuest.name, answers: {}, checklist: {} };
+    data.checklist = data.checklist || {};
+    data.checklist[categoryId] = checkedIds;
+    data.guestName = state.currentGuest.name;
+    data.updatedAt = new Date().toISOString();
+    await setDoc(ref, data);
+  } catch (err) {
+    console.error('Fortschritt konnte nicht gespeichert werden:', err);
+    alert('Dein Fortschritt konnte leider nicht gespeichert werden. Bitte versuch es gleich nochmal.');
+  }
 }
 
 function renderChecklist(cat) {
@@ -498,14 +503,19 @@ function renderFormFields(cat) {
 
 async function saveGuestAnswer(categoryId, key, value) {
   if (!state.currentGuest) return;
-  const ref = doc(db, 'responses', state.currentGuest.id);
-  const snap = await getDoc(ref);
-  const data = snap.exists() ? snap.data() : { guestName: state.currentGuest.name, answers: {} };
-  data.answers = data.answers || {};
-  data.answers[categoryId] = { ...(data.answers[categoryId] || {}), [key]: value };
-  data.guestName = state.currentGuest.name;
-  data.updatedAt = new Date().toISOString();
-  await setDoc(ref, data);
+  try {
+    const ref = doc(db, 'responses', state.currentGuest.id);
+    const snap = await getDoc(ref);
+    const data = snap.exists() ? snap.data() : { guestName: state.currentGuest.name, answers: {} };
+    data.answers = data.answers || {};
+    data.answers[categoryId] = { ...(data.answers[categoryId] || {}), [key]: value };
+    data.guestName = state.currentGuest.name;
+    data.updatedAt = new Date().toISOString();
+    await setDoc(ref, data);
+  } catch (err) {
+    console.error('Antwort konnte nicht gespeichert werden:', err);
+    alert('Deine Angabe konnte leider nicht gespeichert werden. Bitte versuch es gleich nochmal.');
+  }
 }
 
 function renderCategoryBody(cat, body) {
@@ -618,9 +628,14 @@ $('#btn-main-back-landing').addEventListener('click', () => showScreen('#screen-
 
 async function loadResponsesForCurrentGuest() {
   if (!state.currentGuest) return;
-  const ref = doc(db, 'responses', state.currentGuest.id);
-  const snap = await getDoc(ref);
-  state.responses = snap.exists() ? [{ id: state.currentGuest.id, ...snap.data() }] : [];
+  try {
+    const ref = doc(db, 'responses', state.currentGuest.id);
+    const snap = await getDoc(ref);
+    state.responses = snap.exists() ? [{ id: state.currentGuest.id, ...snap.data() }] : [];
+  } catch (err) {
+    console.error('Antworten konnten nicht geladen werden:', err);
+    state.responses = [];
+  }
 }
 
 // ---------------------------------------------------------------

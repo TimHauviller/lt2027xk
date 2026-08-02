@@ -45,14 +45,16 @@
 
 <!-- ===================== GUEST SELECT SCREEN ===================== -->
 <section id="screen-guest" class="screen">
+  <div class="corner-nav">
+    <button id="btn-guest-back" class="link-btn-small">Zurück zur Startseite</button>
+  </div>
   <div class="card">
     <h2>Wer bist du?</h2>
     <p class="muted">Wähle deinen Namen aus der Liste.</p>
     <select id="guest-select">
       <option value="">– Bitte auswählen –</option>
     </select>
-    <button id="btn-guest-continue" class="btn btn-primary" disabled>Weiter</button>
-    <button id="btn-guest-back" class="btn btn-secondary">Zurück zur Startseite</button>
+    <button id="btn-guest-continue" class="btn btn-primary btn-block" disabled>Weiter</button>
     <p class="muted small">Du findest dich nicht in der Liste? Meld dich bei Lucie & Timmy.</p>
   </div>
 </section>

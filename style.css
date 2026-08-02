@@ -153,13 +153,23 @@ h1, h2, h3 { font-family: 'Playfair Display', 'Georgia', serif; }
 .countdown-box small { color: var(--muted); font-size: 0.75rem; }
 
 /* ---------- Guest select ---------- */
-#screen-guest { display: none; align-items: center; justify-content: center; min-height: 100vh; }
+#screen-guest { display: none; align-items: center; justify-content: center; min-height: 100vh; position: relative; }
 #screen-guest.active { display: flex; }
 .card {
   background: #fff; border: 1px solid var(--border); border-radius: 16px;
   padding: 1.5rem; margin-bottom: 1rem;
 }
 #screen-guest .card { max-width: 420px; width: 90%; text-align: center; }
+
+.corner-nav { position: absolute; top: 1.25rem; left: 1.25rem; z-index: 3; }
+.link-btn-small {
+  background: #fff; border: 1px solid var(--border); border-radius: 999px;
+  color: var(--muted); font-family: inherit; font-size: 0.8rem;
+  padding: 0.4rem 0.9rem; cursor: pointer;
+}
+.link-btn-small:hover { color: var(--text); }
+
+.btn-block { display: block; width: 100%; padding: 1.05rem; font-size: 1.15rem; margin: 0.75rem 0 1rem; }
 
 select, input[type=text], input[type=email], input[type=password], input[type=date],
 input[type=datetime-local], input[type=url], textarea {
