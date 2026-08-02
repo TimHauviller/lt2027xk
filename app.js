@@ -213,7 +213,13 @@ async function saveConfig() {
     weddingStart: $('#cfg-start').value,
     weddingEnd: $('#cfg-end').value
   };
-  await setDoc(doc(db, 'config', 'general'), newConfig);
+  try {
+    await setDoc(doc(db, 'config', 'general'), newConfig);
+  } catch (err) {
+    console.error('Startseite konnte nicht gespeichert werden:', err);
+    alert('Speichern hat leider nicht geklappt. Bitte Internetverbindung prüfen und nochmal versuchen.');
+    return;
+  }
   state.config = newConfig;
   renderConfig();
   startCountdowns();
@@ -229,7 +235,13 @@ async function saveColors() {
     grape: $('#clr-grape').value
   };
   const newConfig = { ...state.config, colors };
-  await setDoc(doc(db, 'config', 'general'), newConfig);
+  try {
+    await setDoc(doc(db, 'config', 'general'), newConfig);
+  } catch (err) {
+    console.error('Farben konnten nicht gespeichert werden:', err);
+    alert('Speichern hat leider nicht geklappt. Bitte Internetverbindung prüfen und nochmal versuchen.');
+    return;
+  }
   state.config = newConfig;
   applyColors(colors);
   $('#colors-saved-msg').classList.remove('hidden');
@@ -238,9 +250,54 @@ async function saveColors() {
 
 async function resetColors() {
   const newConfig = { ...state.config, colors: {} };
-  await setDoc(doc(db, 'config', 'general'), newConfig);
+  try {
+    await setDoc(doc(db, 'config', 'general'), newConfig);
+  } catch (err) {
+    console.error('Farben konnten nicht zurückgesetzt werden:', err);
+    alert('Zurücksetzen hat leider nicht geklappt. Bitte nochmal versuchen.');
+    return;
+  }
   state.config = newConfig;
   renderConfig();
+}
+
+// ---------------------------------------------------------------
+// Speichern-Feedback: zeigt direkt am Button an, ob ein Speichervorgang
+// geklappt hat - damit ein Klick auf "Speichern" nie einfach wirkungslos
+// verpufft. Bei Erfolg blinkt der Button kurz grün/bestätigend auf, bei
+// einem Fehler wird das klar angezeigt (Button + Alert) und der Nutzer
+// wird gebeten, es nochmal zu versuchen.
+// ---------------------------------------------------------------
+function flashButton(btn, ok, failMessage) {
+  if (!btn) {
+    if (!ok) alert(failMessage || 'Speichern hat leider nicht geklappt. Bitte nochmal versuchen.');
+    return;
+  }
+  const original = btn.dataset.origLabel || btn.textContent;
+  btn.dataset.origLabel = original;
+  btn.textContent = ok ? 'Gespeichert!' : 'Fehler – nochmal versuchen';
+  btn.classList.toggle('btn-save-fail', !ok);
+  clearTimeout(btn.__flashTimer);
+  btn.__flashTimer = setTimeout(() => {
+    btn.textContent = original;
+    btn.classList.remove('btn-save-fail');
+  }, ok ? 1800 : 3000);
+  if (!ok) alert(failMessage || 'Speichern hat leider nicht geklappt. Bitte Internetverbindung prüfen und nochmal versuchen.');
+}
+
+async function withSaveFeedback(btn, action, failMessage) {
+  if (btn) btn.disabled = true;
+  try {
+    await action();
+    flashButton(btn, true);
+    return true;
+  } catch (err) {
+    console.error('Speichern fehlgeschlagen:', err);
+    flashButton(btn, false, failMessage);
+    return false;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 // ---------------------------------------------------------------
@@ -356,16 +413,23 @@ function renderHub() {
   const list = $('#hub-list');
   list.innerHTML = '';
   if (!state.sections.length) {
-    list.innerHTML = '<p class="muted">Noch keine Bereiche angelegt.</p>';
-    return;
+    const p = document.createElement('p');
+    p.className = 'muted';
+    p.textContent = 'Noch keine Bereiche angelegt.';
+    list.appendChild(p);
+    if (!state.isAdmin) return;
   }
   state.sections.forEach(sec => {
     const catsInSection = state.categories.filter(c => c.sectionId === sec.id);
     const fillableCats = catsInSection.filter(c => c.type === 'form' || c.type === 'checklist');
     const count = catsInSection.length;
-    const card = document.createElement('button');
-    card.type = 'button';
-    card.className = 'hub-card' + (fillableCats.length ? ' hub-card--todo' : '');
+
+    const cardWrap = document.createElement('div');
+    cardWrap.className = 'hub-card' + (fillableCats.length ? ' hub-card--todo' : '');
+
+    const mainBtn = document.createElement('button');
+    mainBtn.type = 'button';
+    mainBtn.className = 'hub-card-main';
     let progressHtml = '';
     if (fillableCats.length) {
       const progress = computeSectionProgress(fillableCats);
@@ -375,15 +439,76 @@ function renderHub() {
           <span class="progress-label">${progress.pct}% erledigt (${progress.done}/${progress.total})</span>
         </div>`;
     }
-    card.innerHTML = `
+    mainBtn.innerHTML = `
       <h3>${escapeHtml(sec.title)}</h3>
       <p class="muted small">${escapeHtml(sec.desc || '')}</p>
       <p class="muted small">${count} ${count === 1 ? 'Kategorie' : 'Kategorien'}</p>
       ${progressHtml}
     `;
-    card.addEventListener('click', () => openSection(sec.id));
-    list.appendChild(card);
+    mainBtn.addEventListener('click', () => openSection(sec.id));
+    cardWrap.appendChild(mainBtn);
+
+    // Im Admin-Modus kann der Bereich direkt hier auf der Übersicht
+    // bearbeitet werden, ohne extra in einen separaten Admin-Bereich
+    // wechseln zu müssen.
+    if (state.isAdmin) {
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'btn-icon-text hub-card-edit-btn';
+      editBtn.textContent = 'Bearbeiten';
+      const editorWrap = document.createElement('div');
+      editorWrap.className = 'hub-card-editor';
+
+      function openEditor() {
+        editorWrap.classList.add('open');
+        editorWrap.innerHTML = '';
+        editBtn.textContent = 'Fertig';
+        const editor = buildSectionEditor(sec, {
+          inline: true,
+          onCancel: () => closeEditor(),
+          onSaved: async () => { await loadSections(); renderHub(); },
+          onDeleted: async () => { await loadSections(); renderHub(); }
+        });
+        editorWrap.appendChild(editor);
+      }
+      function closeEditor() {
+        editorWrap.classList.remove('open');
+        editorWrap.innerHTML = '';
+        editBtn.textContent = 'Bearbeiten';
+      }
+      editBtn.addEventListener('click', () => {
+        if (editorWrap.classList.contains('open')) closeEditor();
+        else openEditor();
+      });
+
+      cardWrap.appendChild(editBtn);
+      cardWrap.appendChild(editorWrap);
+    }
+
+    list.appendChild(cardWrap);
   });
+
+  if (state.isAdmin) {
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn btn-secondary hub-add-section-btn';
+    addBtn.textContent = '+ Neuer Bereich';
+    addBtn.addEventListener('click', async () => {
+      addBtn.disabled = true;
+      try {
+        const maxOrder = state.sections.reduce((m, s) => Math.max(m, s.order || 0), -1);
+        await addDoc(collection(db, 'sections'), { title: 'Neuer Bereich', desc: '', order: maxOrder + 1 });
+        await loadSections();
+        renderHub();
+      } catch (err) {
+        console.error('Bereich konnte nicht angelegt werden:', err);
+        alert('Bereich anlegen hat leider nicht geklappt. Bitte nochmal versuchen.');
+      } finally {
+        addBtn.disabled = false;
+      }
+    });
+    list.appendChild(addBtn);
+  }
 }
 
 function enterHub() {
@@ -804,8 +929,11 @@ function renderCategories() {
   list.innerHTML = '';
   const filtered = state.categories.filter(c => c.sectionId === state.currentSection);
   if (filtered.length === 0) {
-    list.innerHTML = '<p class="muted">Noch keine Inhalte in diesem Bereich.</p>';
-    return;
+    const p = document.createElement('p');
+    p.className = 'muted';
+    p.textContent = 'Noch keine Inhalte in diesem Bereich.';
+    list.appendChild(p);
+    if (!state.isAdmin) return;
   }
   filtered.forEach(cat => {
     const el = document.createElement('div');
@@ -813,17 +941,85 @@ function renderCategories() {
     el.innerHTML = `
       <div class="category-header">
         <span>${escapeHtml(cat.title)}</span>
+        <span class="category-header-actions"></span>
         <span class="chevron"></span>
       </div>
       <div class="category-body"></div>
     `;
-    el.querySelector('.category-header').addEventListener('click', () => {
+    const headerEl = el.querySelector('.category-header');
+    headerEl.addEventListener('click', (e) => {
+      if (e.target.closest('.cat-edit-btn')) return;
       el.classList.toggle('open');
     });
     const body = el.querySelector('.category-body');
     renderCategoryBody(cat, body);
+
+    // Im Admin-Modus lässt sich diese Kategorie direkt hier auf der
+    // Bereichs-Seite bearbeiten, ohne extra in einen separaten
+    // Admin-Bereich wechseln zu müssen.
+    if (state.isAdmin) {
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'btn-icon-text cat-edit-btn';
+      editBtn.textContent = 'Bearbeiten';
+      editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (el.classList.contains('editing')) closeEdit();
+        else openEdit();
+      });
+      el.querySelector('.category-header-actions').appendChild(editBtn);
+
+      function openEdit() {
+        el.classList.add('open', 'editing');
+        editBtn.textContent = 'Fertig';
+        body.innerHTML = '';
+        const editor = buildCategoryEditor(cat, {
+          inline: true,
+          onCancel: () => closeEdit(),
+          onSaved: async () => { await loadCategories(); renderCategories(); },
+          onDeleted: async () => { await loadCategories(); renderCategories(); }
+        });
+        body.appendChild(editor);
+      }
+      function closeEdit() {
+        el.classList.remove('editing');
+        editBtn.textContent = 'Bearbeiten';
+        body.innerHTML = '';
+        renderCategoryBody(cat, body);
+        startCountdowns();
+      }
+    }
+
     list.appendChild(el);
   });
+
+  if (state.isAdmin) {
+    const addWrap = document.createElement('div');
+    addWrap.className = 'admin-inline-add';
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn btn-secondary';
+    addBtn.textContent = '+ Kategorie in diesem Bereich hinzufügen';
+    addBtn.addEventListener('click', async () => {
+      addBtn.disabled = true;
+      try {
+        const maxOrder = state.categories.reduce((m, c) => Math.max(m, c.order || 0), -1);
+        await addDoc(collection(db, 'categories'), {
+          title: 'Neue Kategorie', type: 'info', content: '', images: [], order: maxOrder + 1,
+          countdownTo: '', sectionId: state.currentSection
+        });
+        await loadCategories();
+        renderCategories();
+      } catch (err) {
+        console.error('Kategorie konnte nicht angelegt werden:', err);
+        alert('Kategorie anlegen hat leider nicht geklappt. Bitte nochmal versuchen.');
+      } finally {
+        addBtn.disabled = false;
+      }
+    });
+    addWrap.appendChild(addBtn);
+    list.appendChild(addWrap);
+  }
   startCountdowns();
 }
 
@@ -934,12 +1130,28 @@ $('#btn-admin-back').addEventListener('click', () => {
   showScreen('#screen-hub');
 });
 
+// Zeigt nach dem Einloggen (oder bei einer bereits laufenden Admin-Sitzung
+// nach einem Neuladen der Seite) die gerade sichtbare Gast-Seite direkt mit
+// den Bearbeiten-Knöpfen an - ohne automatisch in den separaten
+// Admin-Bereich zu springen. So kann man als Admin ganz normal auf der
+// Hub- oder Bereichs-Seite weiterklicken und dort direkt bearbeiten.
+function refreshCurrentScreen() {
+  const active = document.querySelector('.screen.active');
+  if (!active) return;
+  if (active.id === 'screen-hub') { renderHub(); }
+  else if (active.id === 'screen-main') { renderCategories(); }
+}
+
 onAuthStateChanged(auth, async (user) => {
   state.isAdmin = !!user;
   updateAdminButtonVisibility();
   if (user) {
-    await loadAdminData();
-    showScreen('#screen-admin');
+    try {
+      await loadAdminData();
+    } catch (err) {
+      console.error('Admin-Daten konnten nicht geladen werden:', err);
+    }
+    refreshCurrentScreen();
   }
 });
 
@@ -977,46 +1189,87 @@ async function loadSectionsAdmin() {
   renderAdminSections();
 }
 
+// ---------------------------------------------------------------
+// Wiederverwendbarer Bereichs-Editor: wird sowohl im flachen Admin-Tab
+// "Bereiche" als auch direkt inline auf der Übersichts-Seite (Hub)
+// verwendet, wenn man als Admin eingeloggt ist.
+// ---------------------------------------------------------------
+function buildSectionEditor(sec, opts) {
+  opts = opts || {};
+  const catCount = state.categories.filter(c => c.sectionId === sec.id).length;
+  const el = document.createElement('div');
+  el.className = 'admin-cat-item' + (opts.inline ? ' admin-cat-item--inline' : '');
+  el.innerHTML = `
+    <div class="admin-cat-item-header">
+      <strong>${escapeHtml(sec.title || 'Neuer Bereich')}</strong>
+      <button type="button" class="btn-icon-text" data-action="delete">Löschen</button>
+    </div>
+    <label>Titel</label>
+    <input type="text" data-field="title" value="${escapeHtml(sec.title || '')}">
+    <label>Beschreibung</label>
+    <textarea data-field="desc" rows="2">${escapeHtml(sec.desc || '')}</textarea>
+    <p class="muted small">${catCount} ${catCount === 1 ? 'Kategorie ist' : 'Kategorien sind'} diesem Bereich zugeordnet.</p>
+    <div class="admin-inline-actions">
+      <button type="button" class="btn btn-primary" data-action="save">Speichern</button>
+      ${opts.onCancel ? '<button type="button" class="btn btn-secondary" data-action="cancel">Abbrechen</button>' : ''}
+    </div>
+  `;
+
+  el.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+    const msg = catCount > 0
+      ? `In diesem Bereich stecken noch ${catCount} Kategorie(n). Wirklich löschen? Die Kategorien bleiben erhalten, sind danach aber keinem Bereich mehr zugeordnet.`
+      : 'Diesen Bereich wirklich löschen?';
+    if (!confirm(msg)) return;
+    try {
+      await deleteDoc(doc(db, 'sections', sec.id));
+      if (opts.onDeleted) await opts.onDeleted();
+    } catch (err) {
+      console.error('Bereich konnte nicht gelöscht werden:', err);
+      alert('Löschen hat leider nicht geklappt. Bitte nochmal versuchen.');
+    }
+  });
+
+  if (opts.onCancel) {
+    el.querySelector('[data-action="cancel"]').addEventListener('click', () => opts.onCancel());
+  }
+
+  const saveBtn = el.querySelector('[data-action="save"]');
+  saveBtn.addEventListener('click', async () => {
+    const updated = {
+      title: el.querySelector('[data-field="title"]').value.trim(),
+      desc: el.querySelector('[data-field="desc"]').value.trim(),
+      order: sec.order || 0
+    };
+    const ok = await withSaveFeedback(saveBtn, () => saveSection(sec.id, updated));
+    if (ok && opts.onSaved) await opts.onSaved({ id: sec.id, ...updated });
+  });
+
+  return el;
+}
+
 function renderAdminSections() {
   const wrap = $('#admin-sections-list');
   wrap.innerHTML = '';
   state.sections.forEach((sec, idx) => {
-    const catCount = state.categories.filter(c => c.sectionId === sec.id).length;
-    const el = document.createElement('div');
-    el.className = 'admin-cat-item';
-    el.innerHTML = `
-      <div class="admin-cat-item-header">
-        <button type="button" class="btn-icon-text" data-action="up">Hoch</button>
-        <button type="button" class="btn-icon-text" data-action="down">Runter</button>
-        <strong>${escapeHtml(sec.title)}</strong>
-        <button type="button" class="btn-icon-text" data-action="delete">Löschen</button>
-      </div>
-      <label>Titel</label>
-      <input type="text" data-field="title" value="${escapeHtml(sec.title)}">
-      <label>Beschreibung</label>
-      <textarea data-field="desc" rows="2">${escapeHtml(sec.desc || '')}</textarea>
-      <p class="muted small">${catCount} ${catCount === 1 ? 'Kategorie ist' : 'Kategorien sind'} diesem Bereich zugeordnet.</p>
-      <button class="btn btn-primary" data-action="save" style="margin-top:0.5rem;">Speichern</button>
-    `;
-    el.querySelector('[data-action="up"]').addEventListener('click', () => moveSection(idx, -1));
-    el.querySelector('[data-action="down"]').addEventListener('click', () => moveSection(idx, 1));
-    el.querySelector('[data-action="delete"]').addEventListener('click', () => deleteSection(sec.id, catCount));
-    el.querySelector('[data-action="save"]').addEventListener('click', () => {
-      const updated = {
-        title: el.querySelector('[data-field="title"]').value.trim(),
-        desc: el.querySelector('[data-field="desc"]').value.trim(),
-        order: sec.order || 0
-      };
-      saveSection(sec.id, updated);
+    const el = buildSectionEditor(sec, {
+      onSaved: async () => { await loadSectionsAdmin(); renderAdminCategories(); },
+      onDeleted: async () => { await loadSectionsAdmin(); }
     });
+    const header = el.querySelector('.admin-cat-item-header');
+    const upBtn = document.createElement('button');
+    upBtn.type = 'button'; upBtn.className = 'btn-icon-text'; upBtn.textContent = 'Hoch';
+    upBtn.addEventListener('click', () => moveSection(idx, -1));
+    const downBtn = document.createElement('button');
+    downBtn.type = 'button'; downBtn.className = 'btn-icon-text'; downBtn.textContent = 'Runter';
+    downBtn.addEventListener('click', () => moveSection(idx, 1));
+    header.insertBefore(downBtn, header.firstChild);
+    header.insertBefore(upBtn, header.firstChild);
     wrap.appendChild(el);
   });
 }
 
 async function saveSection(id, updated) {
   await setDoc(doc(db, 'sections', id), updated);
-  await loadSectionsAdmin();
-  renderAdminCategories();
 }
 
 async function moveSection(idx, dir) {
@@ -1024,32 +1277,46 @@ async function moveSection(idx, dir) {
   if (other < 0 || other >= state.sections.length) return;
   const a = state.sections[idx];
   const b = state.sections[other];
-  await updateDoc(doc(db, 'sections', a.id), { order: b.order });
-  await updateDoc(doc(db, 'sections', b.id), { order: a.order });
-  await loadSectionsAdmin();
+  try {
+    await updateDoc(doc(db, 'sections', a.id), { order: b.order });
+    await updateDoc(doc(db, 'sections', b.id), { order: a.order });
+    await loadSectionsAdmin();
+  } catch (err) {
+    console.error('Verschieben fehlgeschlagen:', err);
+    alert('Verschieben hat leider nicht geklappt. Bitte nochmal versuchen.');
+  }
 }
 
-async function deleteSection(id, catCount) {
-  const msg = catCount > 0
-    ? `In diesem Bereich stecken noch ${catCount} Kategorie(n). Wirklich löschen? Die Kategorien bleiben erhalten, sind danach aber keinem Bereich mehr zugeordnet.`
-    : 'Diesen Bereich wirklich löschen?';
-  if (!confirm(msg)) return;
-  await deleteDoc(doc(db, 'sections', id));
-  await loadSectionsAdmin();
-}
-
-$('#btn-add-section').addEventListener('click', async () => {
-  const maxOrder = state.sections.reduce((m, s) => Math.max(m, s.order || 0), -1);
-  await addDoc(collection(db, 'sections'), { title: 'Neuer Bereich', desc: '', order: maxOrder + 1 });
-  await loadSectionsAdmin();
+$('#btn-add-section').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    const maxOrder = state.sections.reduce((m, s) => Math.max(m, s.order || 0), -1);
+    await addDoc(collection(db, 'sections'), { title: 'Neuer Bereich', desc: '', order: maxOrder + 1 });
+    await loadSectionsAdmin();
+  } catch (err) {
+    console.error('Bereich konnte nicht angelegt werden:', err);
+    alert('Bereich anlegen hat leider nicht geklappt. Bitte nochmal versuchen.');
+  } finally {
+    btn.disabled = false;
+  }
 });
 
-$('#btn-seed-sections').addEventListener('click', async () => {
+$('#btn-seed-sections').addEventListener('click', async (e) => {
   if (!confirm('Standard-Bereiche einfügen? (Bestehende bleiben erhalten)')) return;
-  for (const s of DEFAULT_SECTIONS) {
-    await addDoc(collection(db, 'sections'), s);
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    for (const s of DEFAULT_SECTIONS) {
+      await addDoc(collection(db, 'sections'), s);
+    }
+    await loadSectionsAdmin();
+  } catch (err) {
+    console.error('Standard-Bereiche konnten nicht angelegt werden:', err);
+    alert('Das hat leider nicht geklappt. Bitte nochmal versuchen.');
+  } finally {
+    btn.disabled = false;
   }
-  await loadSectionsAdmin();
 });
 
 async function loadCategoriesAdmin() {
@@ -1057,21 +1324,22 @@ async function loadCategoriesAdmin() {
   renderAdminCategories();
 }
 
-function renderAdminCategories() {
-  const wrap = $('#admin-categories-list');
-  wrap.innerHTML = '';
-  state.categories.forEach((cat, idx) => {
-    const el = document.createElement('div');
-    el.className = 'admin-cat-item';
-    el.innerHTML = `
+// ---------------------------------------------------------------
+// Wiederverwendbarer Kategorie-Editor: wird sowohl im flachen Admin-Tab
+// "Kategorien" als auch direkt inline auf der Bereichs-Seite verwendet,
+// wenn man als Admin eingeloggt ist.
+// ---------------------------------------------------------------
+function buildCategoryEditor(cat, opts) {
+  opts = opts || {};
+  const el = document.createElement('div');
+  el.className = 'admin-cat-item' + (opts.inline ? ' admin-cat-item--inline' : '');
+  el.innerHTML = `
       <div class="admin-cat-item-header">
-        <button type="button" class="btn-icon-text" data-action="up">Hoch</button>
-        <button type="button" class="btn-icon-text" data-action="down">Runter</button>
-        <strong>${escapeHtml(cat.title)}</strong>
+        <strong>${escapeHtml(cat.title || 'Neue Kategorie')}</strong>
         <button type="button" class="btn-icon-text" data-action="delete">Löschen</button>
       </div>
       <label>Titel</label>
-      <input type="text" data-field="title" value="${escapeHtml(cat.title)}">
+      <input type="text" data-field="title" value="${escapeHtml(cat.title || '')}">
       <label>Bereich (Ansicht für Gäste)</label>
       <select data-field="sectionId">
         <option value="" ${!state.sections.some(s => s.id === cat.sectionId) ? 'selected' : ''}>– Kein Bereich –</option>
@@ -1096,32 +1364,32 @@ function renderAdminCategories() {
       <div class="cat-block cat-block-faq">
         <label>Fragen und Antworten</label>
         <div class="qna-editor"></div>
-        <button type="button" class="btn btn-secondary" data-action="add-qna">Frage hinzufügen</button>
+        <button type="button" class="btn btn-secondary btn-small" data-action="add-qna">Frage hinzufügen</button>
       </div>
 
       <div class="cat-block cat-block-form">
         <label>Formularfelder</label>
         <div class="fields-editor"></div>
-        <button type="button" class="btn btn-secondary" data-action="add-field">Feld hinzufügen</button>
+        <button type="button" class="btn btn-secondary btn-small" data-action="add-field">Feld hinzufügen</button>
       </div>
 
       <div class="cat-block cat-block-checklist">
         <label>Checklisten-Punkte</label>
         <div class="items-editor"></div>
-        <button type="button" class="btn btn-secondary" data-action="add-item">Punkt hinzufügen</button>
+        <button type="button" class="btn btn-secondary btn-small" data-action="add-item">Punkt hinzufügen</button>
       </div>
 
       <div class="cat-block cat-block-gallery">
-        <p class="muted small">Für diesen Typ gibt es kein zusätzliches Formular: Gäste sehen direkt einen "Fotos hochladen"-Button sowie alle bisher hochgeladenen Fotos. Nutzt Cloudinary (siehe CLOUDINARY_CLOUD_NAME / CLOUDINARY_UPLOAD_PRESET oben in app.js).</p>
+        <p class="muted small">Für diesen Typ gibt es kein zusätzliches Formular: Gäste sehen direkt einen "Fotos hochladen"-Button sowie alle bisher hochgeladenen Fotos.</p>
       </div>
 
       <div class="cat-block cat-block-assignment">
         <label>Zuteilungen (wer macht was, kein Haken-/Fortschritts-Punkt)</label>
-        <datalist id="guest-names-list-${idx}">
+        <datalist id="guest-names-list-${cat.id || 'new'}">
           ${state.guests.map(g => `<option value="${escapeHtml(g.name)}"></option>`).join('')}
         </datalist>
         <div class="assignments-editor"></div>
-        <button type="button" class="btn btn-secondary" data-action="add-assignment">Zuteilung hinzufügen</button>
+        <button type="button" class="btn btn-secondary btn-small" data-action="add-assignment">Zuteilung hinzufügen</button>
       </div>
 
       <label>Eigener Countdown (optional, Datum und Uhrzeit)</label>
@@ -1130,7 +1398,10 @@ function renderAdminCategories() {
       <label>Bilder (eine Bild-URL pro Zeile, optional)</label>
       <textarea data-field="images" rows="2" placeholder="https://...">${escapeHtml((cat.images || []).join('\n'))}</textarea>
 
-      <button class="btn btn-primary" data-action="save" style="margin-top:0.75rem;">Speichern</button>
+      <div class="admin-inline-actions">
+        <button type="button" class="btn btn-primary" data-action="save">Speichern</button>
+        ${opts.onCancel ? '<button type="button" class="btn btn-secondary" data-action="cancel">Abbrechen</button>' : ''}
+      </div>
     `;
 
     function updateBlocks(type) {
@@ -1148,39 +1419,80 @@ function renderAdminCategories() {
     let localItems = JSON.parse(JSON.stringify(cat.items || []));
     let localAssignments = JSON.parse(JSON.stringify(cat.assignments || []));
 
+    // Formularfelder: bei Auswahl-Feldern ("select") gibt es pro Feld eine
+    // eigene Liste mit einzelnen, entfernbaren Auswahlmöglichkeiten statt
+    // eines einzelnen kommagetrennten Textfelds - deutlich übersichtlicher.
     const fieldsEditor = el.querySelector('.fields-editor');
     function renderFieldsEditor() {
       fieldsEditor.innerHTML = '';
       localFields.forEach((f, fi) => {
-        const row = document.createElement('div');
-        row.className = 'field-row';
-        row.innerHTML = `
-          <input type="text" placeholder="Feldname (z.B. allergien)" data-fkey value="${escapeHtml(f.key || '')}" style="width:26%">
-          <input type="text" placeholder="Beschriftung" data-flabel value="${escapeHtml(f.label || '')}" style="width:26%">
-          <select data-ftype style="width:20%">
-            <option value="text" ${f.type === 'text' ? 'selected' : ''}>Text</option>
-            <option value="textarea" ${f.type === 'textarea' ? 'selected' : ''}>Mehrzeilig</option>
-            <option value="select" ${f.type === 'select' ? 'selected' : ''}>Auswahl</option>
-          </select>
-          <input type="text" placeholder="Optionen, mit Komma" data-foptions value="${escapeHtml((f.options || []).join(', '))}" style="width:20%; ${f.type === 'select' ? '' : 'display:none'}">
-          <button type="button" class="btn-icon-text" data-remove-field>Entfernen</button>
+        if (!f.options) f.options = [];
+        const rowWrap = document.createElement('div');
+        rowWrap.className = 'field-row-wrap';
+        rowWrap.innerHTML = `
+          <div class="field-row">
+            <input type="text" placeholder="Feldname (z.B. allergien)" data-fkey value="${escapeHtml(f.key || '')}" style="width:26%">
+            <input type="text" placeholder="Beschriftung" data-flabel value="${escapeHtml(f.label || '')}" style="width:26%">
+            <select data-ftype style="width:20%">
+              <option value="text" ${f.type === 'text' ? 'selected' : ''}>Text</option>
+              <option value="textarea" ${f.type === 'textarea' ? 'selected' : ''}>Mehrzeilig</option>
+              <option value="select" ${f.type === 'select' ? 'selected' : ''}>Auswahl</option>
+            </select>
+            <button type="button" class="btn-icon-text" data-remove-field>Entfernen</button>
+          </div>
+          <div class="field-options-block" style="${f.type === 'select' ? '' : 'display:none'}">
+            <label class="field-options-label">Auswahlmöglichkeiten (das können Gäste auswählen)</label>
+            <div class="field-options-editor"></div>
+            <button type="button" class="btn-icon-text btn-small" data-add-option>+ Auswahlmöglichkeit hinzufügen</button>
+          </div>
         `;
-        row.querySelector('[data-fkey]').addEventListener('input', e => localFields[fi].key = e.target.value);
-        row.querySelector('[data-flabel]').addEventListener('input', e => localFields[fi].label = e.target.value);
-        const typeSel = row.querySelector('[data-ftype]');
-        const optsInput = row.querySelector('[data-foptions]');
+        rowWrap.querySelector('[data-fkey]').addEventListener('input', e => localFields[fi].key = e.target.value);
+        rowWrap.querySelector('[data-flabel]').addEventListener('input', e => localFields[fi].label = e.target.value);
+        const typeSel = rowWrap.querySelector('[data-ftype]');
+        const optsBlock = rowWrap.querySelector('.field-options-block');
         typeSel.addEventListener('change', e => {
           localFields[fi].type = e.target.value;
-          optsInput.style.display = e.target.value === 'select' ? '' : 'none';
+          optsBlock.style.display = e.target.value === 'select' ? '' : 'none';
         });
-        optsInput.addEventListener('input', e => {
-          localFields[fi].options = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
-        });
-        row.querySelector('[data-remove-field]').addEventListener('click', () => {
+        rowWrap.querySelector('[data-remove-field]').addEventListener('click', () => {
           localFields.splice(fi, 1);
           renderFieldsEditor();
         });
-        fieldsEditor.appendChild(row);
+
+        const optionsEditor = rowWrap.querySelector('.field-options-editor');
+        function renderOptionsEditor() {
+          optionsEditor.innerHTML = '';
+          (localFields[fi].options || []).forEach((opt, oi) => {
+            const orow = document.createElement('div');
+            orow.className = 'option-row';
+            orow.innerHTML = `
+              <input type="text" placeholder="Auswahlmöglichkeit" data-opt value="${escapeHtml(opt)}">
+              <button type="button" class="btn-icon-text" data-remove-opt>Entfernen</button>
+            `;
+            orow.querySelector('[data-opt]').addEventListener('input', e => {
+              localFields[fi].options[oi] = e.target.value;
+            });
+            orow.querySelector('[data-remove-opt]').addEventListener('click', () => {
+              localFields[fi].options.splice(oi, 1);
+              renderOptionsEditor();
+            });
+            optionsEditor.appendChild(orow);
+          });
+          if (!(localFields[fi].options || []).length) {
+            const hint = document.createElement('p');
+            hint.className = 'muted small';
+            hint.textContent = 'Noch keine Auswahlmöglichkeiten.';
+            optionsEditor.appendChild(hint);
+          }
+        }
+        renderOptionsEditor();
+        rowWrap.querySelector('[data-add-option]').addEventListener('click', () => {
+          localFields[fi].options = localFields[fi].options || [];
+          localFields[fi].options.push('');
+          renderOptionsEditor();
+        });
+
+        fieldsEditor.appendChild(rowWrap);
       });
     }
     renderFieldsEditor();
@@ -1234,7 +1546,7 @@ function renderAdminCategories() {
         const row = document.createElement('div');
         row.className = 'assignment-row';
         row.innerHTML = `
-          <input type="text" placeholder="Name" data-aname value="${escapeHtml(a.name || '')}" list="guest-names-list-${idx}">
+          <input type="text" placeholder="Name" data-aname value="${escapeHtml(a.name || '')}" list="guest-names-list-${cat.id || 'new'}">
           <input type="text" placeholder='z.B. "Kümmert sich um die Deko am Weißabend"' data-atext value="${escapeHtml(a.text || '')}">
           <button type="button" class="btn-icon-text" data-remove-assignment>Entfernen</button>
         `;
@@ -1270,10 +1582,23 @@ function renderAdminCategories() {
     const typeSelect = el.querySelector('[data-field="type"]');
     typeSelect.addEventListener('change', () => updateBlocks(typeSelect.value));
 
-    el.querySelector('[data-action="up"]').addEventListener('click', () => moveCategory(idx, -1));
-    el.querySelector('[data-action="down"]').addEventListener('click', () => moveCategory(idx, 1));
-    el.querySelector('[data-action="delete"]').addEventListener('click', () => deleteCategory(cat.id));
-    el.querySelector('[data-action="save"]').addEventListener('click', () => {
+    el.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+      if (!confirm('Diese Kategorie wirklich löschen?')) return;
+      try {
+        await deleteDoc(doc(db, 'categories', cat.id));
+        if (opts.onDeleted) await opts.onDeleted();
+      } catch (err) {
+        console.error('Kategorie konnte nicht gelöscht werden:', err);
+        alert('Löschen hat leider nicht geklappt. Bitte nochmal versuchen.');
+      }
+    });
+
+    if (opts.onCancel) {
+      el.querySelector('[data-action="cancel"]').addEventListener('click', () => opts.onCancel());
+    }
+
+    const saveBtn = el.querySelector('[data-action="save"]');
+    saveBtn.addEventListener('click', async () => {
       const type = typeSelect.value;
       const updated = {
         title: el.querySelector('[data-field="title"]').value.trim(),
@@ -1288,22 +1613,42 @@ function renderAdminCategories() {
       } else if (type === 'faq') {
         updated.qna = localQna.filter(q => (q.question || '').trim() && (q.answer || '').trim());
       } else if (type === 'form') {
-        updated.fields = localFields.filter(f => f.key && f.label);
+        updated.fields = localFields.filter(f => f.key && f.label).map(f => ({ ...f, options: (f.options || []).map(o => (o || '').trim()).filter(Boolean) }));
       } else if (type === 'checklist') {
         updated.items = localItems.filter(it => it.label && it.label.trim());
       } else if (type === 'assignment') {
         updated.assignments = localAssignments.filter(a => (a.name || '').trim() && (a.text || '').trim());
       }
-      saveCategory(cat.id, updated);
+      const ok = await withSaveFeedback(saveBtn, () => saveCategory(cat.id, updated));
+      if (ok && opts.onSaved) await opts.onSaved({ id: cat.id, ...updated });
     });
 
+  return el;
+}
+
+function renderAdminCategories() {
+  const wrap = $('#admin-categories-list');
+  wrap.innerHTML = '';
+  state.categories.forEach((cat, idx) => {
+    const el = buildCategoryEditor(cat, {
+      onSaved: async () => { await loadCategoriesAdmin(); },
+      onDeleted: async () => { await loadCategoriesAdmin(); }
+    });
+    const header = el.querySelector('.admin-cat-item-header');
+    const upBtn = document.createElement('button');
+    upBtn.type = 'button'; upBtn.className = 'btn-icon-text'; upBtn.textContent = 'Hoch';
+    upBtn.addEventListener('click', () => moveCategory(idx, -1));
+    const downBtn = document.createElement('button');
+    downBtn.type = 'button'; downBtn.className = 'btn-icon-text'; downBtn.textContent = 'Runter';
+    downBtn.addEventListener('click', () => moveCategory(idx, 1));
+    header.insertBefore(downBtn, header.firstChild);
+    header.insertBefore(upBtn, header.firstChild);
     wrap.appendChild(el);
   });
 }
 
 async function saveCategory(id, updated) {
   await setDoc(doc(db, 'categories', id), updated);
-  await loadCategoriesAdmin();
 }
 
 async function moveCategory(idx, dir) {
@@ -1311,36 +1656,53 @@ async function moveCategory(idx, dir) {
   if (other < 0 || other >= state.categories.length) return;
   const a = state.categories[idx];
   const b = state.categories[other];
-  await updateDoc(doc(db, 'categories', a.id), { order: b.order });
-  await updateDoc(doc(db, 'categories', b.id), { order: a.order });
-  await loadCategoriesAdmin();
+  try {
+    await updateDoc(doc(db, 'categories', a.id), { order: b.order });
+    await updateDoc(doc(db, 'categories', b.id), { order: a.order });
+    await loadCategoriesAdmin();
+  } catch (err) {
+    console.error('Verschieben fehlgeschlagen:', err);
+    alert('Verschieben hat leider nicht geklappt. Bitte nochmal versuchen.');
+  }
 }
 
-async function deleteCategory(id) {
-  if (!confirm('Diese Kategorie wirklich löschen?')) return;
-  await deleteDoc(doc(db, 'categories', id));
-  await loadCategoriesAdmin();
-}
-
-$('#btn-add-category').addEventListener('click', async () => {
-  const maxOrder = state.categories.reduce((m, c) => Math.max(m, c.order || 0), -1);
-  const defaultSectionId = state.sections[0] ? state.sections[0].id : '';
-  await addDoc(collection(db, 'categories'), {
-    title: 'Neue Kategorie', type: 'info', content: '', images: [], order: maxOrder + 1, countdownTo: '', sectionId: defaultSectionId
-  });
-  await loadCategoriesAdmin();
+$('#btn-add-category').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    const maxOrder = state.categories.reduce((m, c) => Math.max(m, c.order || 0), -1);
+    const defaultSectionId = state.sections[0] ? state.sections[0].id : '';
+    await addDoc(collection(db, 'categories'), {
+      title: 'Neue Kategorie', type: 'info', content: '', images: [], order: maxOrder + 1, countdownTo: '', sectionId: defaultSectionId
+    });
+    await loadCategoriesAdmin();
+  } catch (err) {
+    console.error('Kategorie konnte nicht angelegt werden:', err);
+    alert('Kategorie anlegen hat leider nicht geklappt. Bitte nochmal versuchen.');
+  } finally {
+    btn.disabled = false;
+  }
 });
 
-$('#btn-seed-categories').addEventListener('click', async () => {
+$('#btn-seed-categories').addEventListener('click', async (e) => {
   if (!confirm('Standard-Kategorien einfügen? (Bestehende bleiben erhalten)')) return;
-  const bySectionTitle = {};
-  state.sections.forEach(s => { bySectionTitle[s.title] = s.id; });
-  for (const c of DEFAULT_CATEGORIES) {
-    const wantedTitle = LEGACY_TYPE_SECTION_TITLE[c.type];
-    const sectionId = (wantedTitle && bySectionTitle[wantedTitle]) || (state.sections[0] && state.sections[0].id) || '';
-    await addDoc(collection(db, 'categories'), { ...c, sectionId });
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    const bySectionTitle = {};
+    state.sections.forEach(s => { bySectionTitle[s.title] = s.id; });
+    for (const c of DEFAULT_CATEGORIES) {
+      const wantedTitle = LEGACY_TYPE_SECTION_TITLE[c.type];
+      const sectionId = (wantedTitle && bySectionTitle[wantedTitle]) || (state.sections[0] && state.sections[0].id) || '';
+      await addDoc(collection(db, 'categories'), { ...c, sectionId });
+    }
+    await loadCategoriesAdmin();
+  } catch (err) {
+    console.error('Standard-Kategorien konnten nicht angelegt werden:', err);
+    alert('Das hat leider nicht geklappt. Bitte nochmal versuchen.');
+  } finally {
+    btn.disabled = false;
   }
-  await loadCategoriesAdmin();
 });
 
 // ---------------------------------------------------------------
@@ -1355,19 +1717,33 @@ function renderAdminGuests() {
     row.innerHTML = `<span style="flex:1">${escapeHtml(g.name)}</span><button type="button" class="btn-icon-text" data-id="${g.id}">Löschen</button>`;
     row.querySelector('button').addEventListener('click', async () => {
       if (!confirm(`${g.name} wirklich löschen?`)) return;
-      await deleteDoc(doc(db, 'guests', g.id));
-      await loadGuests();
+      try {
+        await deleteDoc(doc(db, 'guests', g.id));
+        await loadGuests();
+      } catch (err) {
+        console.error('Gast konnte nicht gelöscht werden:', err);
+        alert('Löschen hat leider nicht geklappt. Bitte nochmal versuchen.');
+      }
     });
     wrap.appendChild(row);
   });
 }
 
-$('#btn-add-guest').addEventListener('click', async () => {
+$('#btn-add-guest').addEventListener('click', async (e) => {
   const name = $('#new-guest-name').value.trim();
   if (!name) return;
-  await addDoc(collection(db, 'guests'), { name });
-  $('#new-guest-name').value = '';
-  await loadGuests();
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    await addDoc(collection(db, 'guests'), { name });
+    $('#new-guest-name').value = '';
+    await loadGuests();
+  } catch (err) {
+    console.error('Gast konnte nicht angelegt werden:', err);
+    alert('Anlegen hat leider nicht geklappt. Bitte nochmal versuchen.');
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 // ---------------------------------------------------------------

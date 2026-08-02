@@ -195,9 +195,9 @@ label { font-size: 0.85rem; color: var(--muted); display: block; margin-top: 0.5
 /* ---------- Hub (Übersicht) ---------- */
 .hub-list { padding: 1.25rem; max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 1rem; }
 .hub-card {
-  display: block; width: 100%; text-align: left; font-family: inherit;
+  position: relative;
   background: #fff; border: 1px solid var(--border); border-radius: 16px;
-  padding: 1.25rem 1.5rem; cursor: pointer;
+  padding: 1.25rem 1.5rem;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .hub-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(63,0,19,0.10); }
@@ -206,6 +206,17 @@ label { font-size: 0.85rem; color: var(--muted); display: block; margin-top: 0.5
 .hub-card--todo { border: 1px solid var(--terracotta); border-left-width: 6px; }
 .hub-card--todo h3 { color: var(--blood-orange); }
 .hub-card--todo .progress-bar { background: rgba(171, 72, 45, 0.18); }
+
+/* Klickbarer Hauptbereich einer Hub-Karte (öffnet den Bereich). Der
+   "Bearbeiten"-Knopf sitzt daneben/darunter und navigiert nicht weg. */
+.hub-card-main {
+  display: block; width: 100%; text-align: left; font-family: inherit;
+  background: none; border: none; padding: 0; margin: 0; color: inherit; cursor: pointer;
+}
+.hub-card-edit-btn { margin-top: 0.75rem; }
+.hub-card-editor { display: none; margin-top: 0.75rem; }
+.hub-card-editor.open { display: block; }
+.hub-add-section-btn { display: block; width: 100%; }
 
 /* ---------- Progress bar (Checklisten & Übersicht) ---------- */
 .progress-wrap { margin-top: 0.75rem; }
@@ -237,8 +248,11 @@ label { font-size: 0.85rem; color: var(--muted); display: block; margin-top: 0.5
   display: flex; align-items: center; gap: 0.6rem; padding: 1rem 1.2rem;
   cursor: pointer; font-weight: bold; color: var(--sage-dark);
 }
+.category-header > span:first-child { flex: 1; }
+.category-header-actions { display: flex; align-items: center; flex-shrink: 0; }
+.category-header-actions .cat-edit-btn { white-space: nowrap; font-weight: normal; }
 .category-header .chevron {
-  margin-left: auto; width: 14px; height: 14px; position: relative; flex-shrink: 0;
+  margin-left: 0.3rem; width: 14px; height: 14px; position: relative; flex-shrink: 0;
 }
 .category-header .chevron::before,
 .category-header .chevron::after {
@@ -344,6 +358,7 @@ label { font-size: 0.85rem; color: var(--muted); display: block; margin-top: 0.5
   cursor: pointer; padding: 0.3rem 0.6rem; font-size: 0.8rem; font-family: inherit; color: var(--muted);
 }
 .btn-icon-text:hover { background: var(--cream); color: var(--text); }
+.btn-small { font-size: 0.78rem; padding: 0.3rem 0.6rem; }
 .field-row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.4rem; }
 .field-row input { margin: 0; }
 .field-row select { margin: 0; }
@@ -352,6 +367,25 @@ label { font-size: 0.85rem; color: var(--muted); display: block; margin-top: 0.5
   border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; margin-bottom: 0.5rem;
 }
 .qna-row input, .qna-row textarea { margin: 0 0 0.4rem; }
+
+/* Formularfelder: jedes Feld in einem eigenen Rahmen, mit einer klaren
+   Liste einzelner Auswahlmöglichkeiten statt eines kommagetrennten Feldes */
+.field-row-wrap {
+  border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; margin-bottom: 0.5rem;
+}
+.field-row-wrap .field-row { margin-bottom: 0; }
+.field-options-block { margin-top: 0.6rem; padding-left: 0.6rem; border-left: 2px solid var(--border); }
+.field-options-label { margin-top: 0; font-size: 0.78rem; }
+.option-row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.35rem; }
+.option-row input { margin: 0; flex: 1; }
+
+/* Inline-Bearbeiten direkt auf den Gast-Seiten (nur im Admin-Modus sichtbar) */
+.admin-cat-item--inline { border-color: var(--terracotta); }
+.admin-inline-actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; }
+.admin-inline-add { margin-top: 1rem; text-align: center; }
+
+/* Speichern-Feedback direkt am Button, statt eines stillen Fehlschlags */
+.btn-save-fail { background: #b3402a !important; border-color: #b3402a !important; color: #fff !important; }
 
 table.responses-table { width: 100%; border-collapse: collapse; background: #fff; }
 table.responses-table th, table.responses-table td {
