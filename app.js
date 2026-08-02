@@ -457,6 +457,32 @@ function renderFaq(cat) {
   return wrap;
 }
 
+function renderAssignments(cat) {
+  const wrap = document.createElement('div');
+  const list = cat.assignments || [];
+  if (!list.length) {
+    const p = document.createElement('p');
+    p.className = 'muted';
+    p.textContent = 'Noch nichts verteilt.';
+    wrap.appendChild(p);
+    return wrap;
+  }
+  list.forEach(item => {
+    const block = document.createElement('div');
+    block.className = 'assignment-item';
+    const name = document.createElement('p');
+    name.className = 'assignment-name';
+    name.textContent = item.name;
+    const text = document.createElement('p');
+    text.className = 'assignment-text';
+    text.textContent = item.text;
+    block.appendChild(name);
+    block.appendChild(text);
+    wrap.appendChild(block);
+  });
+  return wrap;
+}
+
 function getGuestChecklist(catId) {
   if (!state.currentGuest) return [];
   const resp = state.responses.find(r => r.id === state.currentGuest.id);
@@ -619,6 +645,8 @@ function renderCategoryBody(cat, body) {
     body.appendChild(renderFaq(cat));
   } else if (cat.type === 'gallery') {
     body.appendChild(renderGalleryUpload(cat));
+  } else if (cat.type === 'assignment') {
+    body.appendChild(renderAssignments(cat));
   } else {
     const p = document.createElement('div');
     p.innerHTML = escapeHtml(cat.content || '').replace(/\n/g, '<br>');
@@ -695,6 +723,24 @@ async function uploadGalleryPhoto(categoryId, file) {
   });
 }
 
+async function downloadPhoto(url, filename) {
+  try {
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename || 'foto.jpg';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    console.error('Download fehlgeschlagen:', err);
+    window.open(url, '_blank');
+  }
+}
+
 async function loadAndRenderGalleryPhotos(categoryId, grid) {
   grid.innerHTML = '<p class="muted small">Fotos werden geladen ...</p>';
   try {
@@ -707,11 +753,21 @@ async function loadAndRenderGalleryPhotos(categoryId, grid) {
     }
     snap.docs.forEach(d => {
       const data = d.data();
+      const filename = (data.path || 'foto.jpg').split('/').pop();
+      const item = document.createElement('div');
+      item.className = 'gallery-item';
       const img = document.createElement('img');
       img.src = data.url;
       img.alt = '';
       img.loading = 'lazy';
-      grid.appendChild(img);
+      const dl = document.createElement('button');
+      dl.type = 'button';
+      dl.className = 'gallery-download-btn';
+      dl.textContent = 'Herunterladen';
+      dl.addEventListener('click', () => downloadPhoto(data.url, filename));
+      item.appendChild(img);
+      item.appendChild(dl);
+      grid.appendChild(item);
     });
   } catch (err) {
     console.error('Fotos konnten nicht geladen werden:', err);
@@ -1005,6 +1061,7 @@ function renderAdminCategories() {
         <option value="checklist" ${cat.type === 'checklist' ? 'selected' : ''}>Checkliste mit Fortschritt</option>
         <option value="day" ${cat.type === 'day' ? 'selected' : ''}>Tag im Tagesplan</option>
         <option value="gallery" ${cat.type === 'gallery' ? 'selected' : ''}>Foto-Galerie zum Hochladen</option>
+        <option value="assignment" ${cat.type === 'assignment' ? 'selected' : ''}>Zuteilung (z.B. "Dein Teil")</option>
       </select>
 
       <div class="cat-block cat-block-info">
@@ -1034,6 +1091,15 @@ function renderAdminCategories() {
         <p class="muted small">Für diesen Typ gibt es kein zusätzliches Formular: Gäste sehen direkt einen "Fotos hochladen"-Button sowie alle bisher hochgeladenen Fotos. Braucht Firebase Storage im Projekt (siehe README).</p>
       </div>
 
+      <div class="cat-block cat-block-assignment">
+        <label>Zuteilungen (wer macht was, kein Haken-/Fortschritts-Punkt)</label>
+        <datalist id="guest-names-list-${idx}">
+          ${state.guests.map(g => `<option value="${escapeHtml(g.name)}"></option>`).join('')}
+        </datalist>
+        <div class="assignments-editor"></div>
+        <button type="button" class="btn btn-secondary" data-action="add-assignment">Zuteilung hinzufügen</button>
+      </div>
+
       <label>Eigener Countdown (optional, Datum und Uhrzeit)</label>
       <input type="datetime-local" data-field="countdownTo" value="${cat.countdownTo || ''}">
 
@@ -1049,12 +1115,14 @@ function renderAdminCategories() {
       el.querySelector('.cat-block-form').style.display = type === 'form' ? '' : 'none';
       el.querySelector('.cat-block-checklist').style.display = type === 'checklist' ? '' : 'none';
       el.querySelector('.cat-block-gallery').style.display = type === 'gallery' ? '' : 'none';
+      el.querySelector('.cat-block-assignment').style.display = type === 'assignment' ? '' : 'none';
     }
     updateBlocks(cat.type);
 
     let localFields = JSON.parse(JSON.stringify(cat.fields || []));
     let localQna = JSON.parse(JSON.stringify(cat.qna || []));
     let localItems = JSON.parse(JSON.stringify(cat.items || []));
+    let localAssignments = JSON.parse(JSON.stringify(cat.assignments || []));
 
     const fieldsEditor = el.querySelector('.fields-editor');
     function renderFieldsEditor() {
@@ -1135,6 +1203,33 @@ function renderAdminCategories() {
     }
     renderItemsEditor();
 
+    const assignmentsEditor = el.querySelector('.assignments-editor');
+    function renderAssignmentsEditor() {
+      assignmentsEditor.innerHTML = '';
+      localAssignments.forEach((a, ai) => {
+        const row = document.createElement('div');
+        row.className = 'assignment-row';
+        row.innerHTML = `
+          <input type="text" placeholder="Name" data-aname value="${escapeHtml(a.name || '')}" list="guest-names-list-${idx}">
+          <input type="text" placeholder='z.B. "Kümmert sich um die Deko am Weißabend"' data-atext value="${escapeHtml(a.text || '')}">
+          <button type="button" class="btn-icon-text" data-remove-assignment>Entfernen</button>
+        `;
+        row.querySelector('[data-aname]').addEventListener('input', e => localAssignments[ai].name = e.target.value);
+        row.querySelector('[data-atext]').addEventListener('input', e => localAssignments[ai].text = e.target.value);
+        row.querySelector('[data-remove-assignment]').addEventListener('click', () => {
+          localAssignments.splice(ai, 1);
+          renderAssignmentsEditor();
+        });
+        assignmentsEditor.appendChild(row);
+      });
+    }
+    renderAssignmentsEditor();
+
+    el.querySelector('[data-action="add-assignment"]').addEventListener('click', () => {
+      localAssignments.push({ name: '', text: '' });
+      renderAssignmentsEditor();
+    });
+
     el.querySelector('[data-action="add-field"]').addEventListener('click', () => {
       localFields.push({ key: '', label: '', type: 'text', options: [] });
       renderFieldsEditor();
@@ -1172,6 +1267,8 @@ function renderAdminCategories() {
         updated.fields = localFields.filter(f => f.key && f.label);
       } else if (type === 'checklist') {
         updated.items = localItems.filter(it => it.label && it.label.trim());
+      } else if (type === 'assignment') {
+        updated.assignments = localAssignments.filter(a => (a.name || '').trim() && (a.text || '').trim());
       }
       saveCategory(cat.id, updated);
     });

@@ -77,7 +77,7 @@ h1, h2, h3 { font-family: 'Playfair Display', 'Georgia', serif; }
   z-index: 3;
   text-align: left;
 }
-.nav-brand { font-size: 1.8rem; color: var(--grape); }
+.nav-brand { font-size: 1.8rem; color: var(--blood-orange); text-shadow: 0 1px 6px rgba(251,243,231,0.9); }
 
 .hero {
   position: relative;
@@ -85,16 +85,26 @@ h1, h2, h3 { font-family: 'Playfair Display', 'Georgia', serif; }
   height: 68vh;
   min-height: 380px;
   background-color: var(--cream);
+  background-image: url('villa-illustration.jpg');
   background-size: cover;
   background-position: center;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.hero-overlay { position: relative; z-index: 2; color: var(--grape); padding: 0 1.5rem; text-align: center; }
+.hero-overlay {
+  position: relative;
+  z-index: 2;
+  color: var(--blood-orange);
+  padding: 1.5rem 2rem;
+  text-align: center;
+  background: rgba(251, 243, 231, 0.85);
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(63, 0, 19, 0.15);
+}
 .script-tag { font-size: 2rem; margin: 0; color: var(--terracotta); }
-#landing-title { font-size: 3rem; margin: 0.2rem 0 0.6rem; color: var(--grape); }
-.hero-overlay #landing-intro { color: var(--grape); opacity: 0.85; margin: 0; letter-spacing: 0.04em; }
+#landing-title { font-size: 3rem; margin: 0.2rem 0 0.6rem; color: var(--blood-orange); }
+.hero-overlay #landing-intro { color: var(--blood-orange); opacity: 0.9; margin: 0; letter-spacing: 0.04em; }
 
 /* Info ribbon */
 .marquee {
@@ -266,6 +276,27 @@ label { font-size: 0.85rem; color: var(--muted); display: block; margin-top: 0.5
 /* Foto-Upload */
 .gallery-upload { margin: 0.25rem 0 1rem; }
 .gallery-status { margin-top: 0.5rem; }
+.image-gallery.gallery-uploads .gallery-item { display: flex; flex-direction: column; gap: 0.3rem; }
+.image-gallery.gallery-uploads img {
+  width: 100%; height: 110px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border);
+}
+.gallery-download-btn {
+  font-family: inherit; font-size: 0.72rem; padding: 0.25rem 0;
+  border: 1px solid var(--border); border-radius: 6px; background: #fff;
+  color: var(--muted); cursor: pointer;
+}
+.gallery-download-btn:hover { background: var(--cream); color: var(--text); }
+
+/* Zuteilung / Dein Teil */
+.assignment-item {
+  border: 1px solid var(--border); border-radius: 10px; padding: 0.7rem 0.9rem; margin-bottom: 0.6rem;
+}
+.assignment-name { font-weight: 600; color: var(--blood-orange); margin: 0 0 0.2rem; }
+.assignment-text { margin: 0; }
+.assignment-row {
+  border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; margin-bottom: 0.5rem;
+}
+.assignment-row input { margin: 0 0 0.4rem; }
 
 .app-footer { padding: 1.5rem; display: flex; justify-content: center; max-width: 640px; margin: 0 auto; }
 .admin-corner-btn {
