@@ -77,14 +77,13 @@ h1, h2, h3 { font-family: 'Playfair Display', 'Georgia', serif; }
   z-index: 3;
   text-align: left;
 }
-.nav-brand { font-size: 1.8rem; color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,0.35); }
+.nav-brand { font-size: 1.8rem; color: var(--grape); }
 
 .hero {
   position: relative;
   width: 100%;
   height: 68vh;
   min-height: 380px;
-  background-image: linear-gradient(180deg, rgba(20,16,12,0.05) 0%, rgba(20,16,12,0.45) 100%), url('villa-illustration.jpg');
   background-color: var(--cream);
   background-size: cover;
   background-position: center;
@@ -92,10 +91,10 @@ h1, h2, h3 { font-family: 'Playfair Display', 'Georgia', serif; }
   align-items: center;
   justify-content: center;
 }
-.hero-overlay { position: relative; z-index: 2; color: #fff; padding: 0 1.5rem; }
-.script-tag { font-size: 2rem; margin: 0; color: var(--butter); }
-#landing-title { font-size: 3rem; margin: 0.2rem 0 0.6rem; color: #fff; }
-.hero-overlay #landing-intro { color: #fff; opacity: 0.92; margin: 0; letter-spacing: 0.04em; }
+.hero-overlay { position: relative; z-index: 2; color: var(--grape); padding: 0 1.5rem; text-align: center; }
+.script-tag { font-size: 2rem; margin: 0; color: var(--terracotta); }
+#landing-title { font-size: 3rem; margin: 0.2rem 0 0.6rem; color: var(--grape); }
+.hero-overlay #landing-intro { color: var(--grape); opacity: 0.85; margin: 0; letter-spacing: 0.04em; }
 
 /* Info ribbon */
 .marquee {
@@ -332,4 +331,6 @@ table.responses-table th, table.responses-table td {
   #landing-title { font-size: 1.9rem; }
   .countdown-box { min-width: 48px; padding: 0.5rem 0.6rem; }
   .main-header { padding: 1rem; }
+  .marquee { white-space: normal; }
+  .marquee-track { font-size: 0.72rem; line-height: 1.5; letter-spacing: 0.06em; }
 }
