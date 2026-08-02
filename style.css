@@ -58,6 +58,23 @@ h1, h2, h3 { font-family: 'Playfair Display', 'Georgia', serif; }
 .muted { color: var(--muted); }
 .small { font-size: 0.85rem; }
 
+/* ---------- Intro-Video (vor der Startseite) ---------- */
+#screen-intro {
+  display: none; align-items: center; justify-content: center;
+  flex-direction: column; gap: 1.5rem; min-height: 100vh;
+  background: var(--grape); padding: 1.5rem; text-align: center;
+}
+#screen-intro.active { display: flex; }
+.intro-video-frame { max-width: 420px; width: 100%; }
+.intro-video-frame video {
+  display: block; width: 100%; border-radius: 4px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.35); background: #000;
+}
+.intro-open-btn {
+  opacity: 0; transition: opacity 0.5s ease;
+}
+.intro-open-btn.show { opacity: 1; }
+
 /* ---------- Landing ---------- */
 #screen-landing {
   display: none;
@@ -230,10 +247,12 @@ label { font-size: 0.85rem; color: var(--muted); display: block; margin-top: 0.5
 /* Icons deutlich größer und bei allen Karten exakt gleich groß (fixe
    Box + object-fit:cover), damit unterschiedliche Quellbilder nicht
    unterschiedlich groß wirken. */
+/* Transparenter Hintergrund statt Box, damit die neu gestalteten
+   Icons frei auf der weißen Karte "schweben" statt in einem Kästchen
+   zu sitzen - wirkt hochwertiger. */
 .hub-card-icon {
-  width: 108px; height: 108px; border-radius: 20px; object-fit: cover;
-  flex-shrink: 0; background: var(--cream);
-  border: 1px solid var(--border);
+  width: 108px; height: 108px; border-radius: 20px; object-fit: contain;
+  flex-shrink: 0; background: transparent; border: none;
 }
 .hub-card-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
 .hub-card-edit-btn { margin-top: 0; white-space: nowrap; }

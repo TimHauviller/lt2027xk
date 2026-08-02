@@ -1365,6 +1365,40 @@ function renderGuestSelect() {
 }
 
 // ---------------------------------------------------------------
+// Intro-Video: spielt beim ersten Laden einmalig automatisch, danach
+// (oder falls Autoplay vom Browser blockiert wird) erscheint der
+// Button "Öffne die Einladung", der zur eigentlichen Startseite führt.
+// ---------------------------------------------------------------
+(function setupIntroVideo() {
+  const introVideo = $('#intro-video');
+  const openBtn = $('#btn-open-invitation');
+  if (!introVideo || !openBtn) return;
+
+  let revealed = false;
+  function revealOpenButton() {
+    if (revealed) return;
+    revealed = true;
+    openBtn.classList.remove('hidden');
+    requestAnimationFrame(() => openBtn.classList.add('show'));
+  }
+
+  introVideo.addEventListener('ended', revealOpenButton);
+  // Falls Autoplay vom Browser verhindert wird, bleibt der Gast sonst auf
+  // einem stehenden Bild ohne Möglichkeit weiterzukommen - deshalb hier
+  // sofort den Button zeigen.
+  const playAttempt = introVideo.play();
+  if (playAttempt && typeof playAttempt.catch === 'function') {
+    playAttempt.catch(() => revealOpenButton());
+  }
+  // Zusätzliches Sicherheitsnetz: spätestens kurz nach Video-Ende in jedem
+  // Fall den Button zeigen, auch wenn "ended" aus irgendeinem Grund nicht
+  // feuert.
+  setTimeout(revealOpenButton, 7000);
+
+  openBtn.addEventListener('click', () => showScreen('#screen-landing'));
+})();
+
+// ---------------------------------------------------------------
 // Event-Listener: Landing / Gast-Auswahl / Hub / Bereichs-Screen
 // ---------------------------------------------------------------
 $('#btn-enter').addEventListener('click', () => {

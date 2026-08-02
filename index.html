@@ -11,8 +11,21 @@
 </head>
 <body>
 
+<!-- ===================== INTRO-VIDEO SCREEN ===================== -->
+<!-- Wird beim ersten Laden gezeigt: Video spielt einmalig automatisch,
+     danach (oder sobald man selbst klicken will) öffnet der Button die
+     eigentliche Startseite. -->
+<section id="screen-intro" class="screen active">
+  <div class="intro-video-frame">
+    <video id="intro-video" autoplay muted playsinline preload="auto">
+      <source src="https://res.cloudinary.com/g0obb6vj/video/upload/v1785707572/hochzeit/intro/fttvmeptwzamm993lo7w.mp4" type="video/mp4">
+    </video>
+  </div>
+  <button id="btn-open-invitation" class="btn btn-primary intro-open-btn hidden">Öffne die Einladung</button>
+</section>
+
 <!-- ===================== LANDING SCREEN ===================== -->
-<section id="screen-landing" class="screen active">
+<section id="screen-landing" class="screen">
   <nav class="landing-nav"><span class="nav-brand">L &amp; T</span></nav>
 
   <div class="hero" id="landing-photo">
