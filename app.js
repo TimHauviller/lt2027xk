@@ -7,14 +7,20 @@ import {
 import {
   getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import {
-  getStorage, ref as storageRef, uploadBytes, getDownloadURL
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
-const storage = getStorage(app);
+
+// ---------------------------------------------------------------
+// Foto-Uploads laufen über Cloudinary (kostenloser Tarif, kein Firebase
+// Storage / kein Blaze-Upgrade nötig). "Cloud name" und "Upload preset"
+// kommen aus dem kostenlosen Cloudinary-Account (Dashboard -> Settings ->
+// Upload -> Upload presets -> Unsigned). Bis diese Werte eingetragen sind,
+// zeigt die Foto-Galerie einen Hinweis statt eines Fehlers an.
+// ---------------------------------------------------------------
+const CLOUDINARY_CLOUD_NAME = 'DEIN_CLOUD_NAME';
+const CLOUDINARY_UPLOAD_PRESET = 'DEIN_UPLOAD_PRESET';
 
 // ---------------------------------------------------------------
 // Bereiche: die Ansichten, zwischen denen Gäste im Übersichts-Fenster
@@ -657,12 +663,19 @@ function renderCategoryBody(cat, body) {
 }
 
 // ---------------------------------------------------------------
-// Foto-Galerie: Gäste können eigene Fotos hochladen (Firebase Storage).
-// Setzt voraus, dass Storage im Firebase-Projekt aktiviert und die
-// mitgelieferten storage.rules veröffentlicht sind.
+// Foto-Galerie: Gäste können eigene Fotos hochladen (Cloudinary, kostenlos).
+// Setzt voraus, dass CLOUDINARY_CLOUD_NAME und CLOUDINARY_UPLOAD_PRESET
+// oben im File eingetragen sind (siehe Kommentar dort).
 // ---------------------------------------------------------------
 function renderGalleryUpload(cat) {
   const wrap = document.createElement('div');
+
+  if (CLOUDINARY_CLOUD_NAME === 'DEIN_CLOUD_NAME') {
+    const hint = document.createElement('p');
+    hint.className = 'muted small';
+    hint.textContent = 'Foto-Upload ist noch nicht eingerichtet (Cloudinary-Zugangsdaten fehlen).';
+    wrap.appendChild(hint);
+  }
 
   const uploadWrap = document.createElement('div');
   uploadWrap.className = 'gallery-upload';
@@ -710,14 +723,25 @@ function renderGalleryUpload(cat) {
 }
 
 async function uploadGalleryPhoto(categoryId, file) {
-  const path = `photos/${categoryId}/${Date.now()}_${file.name}`;
-  const fileRef = storageRef(storage, path);
-  await uploadBytes(fileRef, file);
-  const url = await getDownloadURL(fileRef);
+  if (CLOUDINARY_CLOUD_NAME === 'DEIN_CLOUD_NAME') {
+    throw new Error('Cloudinary ist noch nicht eingerichtet.');
+  }
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+  formData.append('folder', `hochzeit/${categoryId}`);
+  const resp = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+    method: 'POST',
+    body: formData
+  });
+  if (!resp.ok) {
+    throw new Error(`Cloudinary-Upload fehlgeschlagen (${resp.status})`);
+  }
+  const data = await resp.json();
   await addDoc(collection(db, 'photos'), {
     categoryId,
-    url,
-    path,
+    url: data.secure_url,
+    path: `${Date.now()}_${file.name}`,
     guestName: (state.currentGuest && state.currentGuest.name) || 'Unbekannt',
     uploadedAt: new Date().toISOString()
   });
@@ -771,7 +795,7 @@ async function loadAndRenderGalleryPhotos(categoryId, grid) {
     });
   } catch (err) {
     console.error('Fotos konnten nicht geladen werden:', err);
-    grid.innerHTML = '<p class="muted small">Fotos konnten nicht geladen werden. Ist Firebase Storage schon eingerichtet?</p>';
+    grid.innerHTML = '<p class="muted small">Fotos konnten nicht geladen werden. Bitte später nochmal versuchen.</p>';
   }
 }
 
@@ -1088,7 +1112,7 @@ function renderAdminCategories() {
       </div>
 
       <div class="cat-block cat-block-gallery">
-        <p class="muted small">Für diesen Typ gibt es kein zusätzliches Formular: Gäste sehen direkt einen "Fotos hochladen"-Button sowie alle bisher hochgeladenen Fotos. Braucht Firebase Storage im Projekt (siehe README).</p>
+        <p class="muted small">Für diesen Typ gibt es kein zusätzliches Formular: Gäste sehen direkt einen "Fotos hochladen"-Button sowie alle bisher hochgeladenen Fotos. Nutzt Cloudinary (siehe CLOUDINARY_CLOUD_NAME / CLOUDINARY_UPLOAD_PRESET oben in app.js).</p>
       </div>
 
       <div class="cat-block cat-block-assignment">
