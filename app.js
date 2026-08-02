@@ -99,8 +99,17 @@ let state = {
   responses: [],
   currentGuest: JSON.parse(localStorage.getItem('hz_guest') || 'null'),
   currentSection: null,
-  isAdmin: false
+  isAdmin: false,
+  // Erlaubt, die Bearbeiten-Werkzeuge auf den Gast-Seiten kurzzeitig
+  // auszublenden ("Admin: Aus"), ohne sich komplett auszuloggen - z.B. um
+  // die Seite so zu sehen, wie ein Gast sie sieht.
+  adminModeOn: true
 };
+
+// Sind wir eingeloggt UND ist der Admin-Modus gerade eingeschaltet?
+function isAdminActive() {
+  return state.isAdmin && state.adminModeOn;
+}
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -108,6 +117,18 @@ const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 function showScreen(id) {
   $$('.screen').forEach(s => s.classList.remove('active'));
   $(id).classList.add('active');
+}
+
+// Vertauscht zwei benachbarte Einträge in einem lokalen Array (z.B. beim
+// Verschieben von Formularfeldern, Fragen, Checklisten-Punkten,
+// Zuteilungen oder Auswahlmöglichkeiten innerhalb eines Editors).
+function moveInArray(arr, idx, dir) {
+  const other = idx + dir;
+  if (other < 0 || other >= arr.length) return false;
+  const tmp = arr[idx];
+  arr[idx] = arr[other];
+  arr[other] = tmp;
+  return true;
 }
 
 function escapeHtml(str) {
@@ -417,12 +438,11 @@ function renderHub() {
     p.className = 'muted';
     p.textContent = 'Noch keine Bereiche angelegt.';
     list.appendChild(p);
-    if (!state.isAdmin) return;
+    if (!isAdminActive()) return;
   }
-  state.sections.forEach(sec => {
+  state.sections.forEach((sec, idx) => {
     const catsInSection = state.categories.filter(c => c.sectionId === sec.id);
     const fillableCats = catsInSection.filter(c => c.type === 'form' || c.type === 'checklist');
-    const count = catsInSection.length;
 
     const cardWrap = document.createElement('div');
     cardWrap.className = 'hub-card' + (fillableCats.length ? ' hub-card--todo' : '');
@@ -442,20 +462,36 @@ function renderHub() {
     mainBtn.innerHTML = `
       <h3>${escapeHtml(sec.title)}</h3>
       <p class="muted small">${escapeHtml(sec.desc || '')}</p>
-      <p class="muted small">${count} ${count === 1 ? 'Kategorie' : 'Kategorien'}</p>
       ${progressHtml}
     `;
     mainBtn.addEventListener('click', () => openSection(sec.id));
     cardWrap.appendChild(mainBtn);
 
     // Im Admin-Modus kann der Bereich direkt hier auf der Übersicht
-    // bearbeitet werden, ohne extra in einen separaten Admin-Bereich
-    // wechseln zu müssen.
-    if (state.isAdmin) {
+    // bearbeitet und in seiner Reihenfolge verschoben werden, ohne extra
+    // in einen separaten Admin-Bereich wechseln zu müssen.
+    if (isAdminActive()) {
+      const actionsRow = document.createElement('div');
+      actionsRow.className = 'hub-card-actions';
+      if (idx > 0) {
+        const upBtn = document.createElement('button');
+        upBtn.type = 'button'; upBtn.className = 'btn-icon-text'; upBtn.textContent = 'Hoch';
+        upBtn.addEventListener('click', async () => { await moveSection(idx, -1); renderHub(); });
+        actionsRow.appendChild(upBtn);
+      }
+      if (idx < state.sections.length - 1) {
+        const downBtn = document.createElement('button');
+        downBtn.type = 'button'; downBtn.className = 'btn-icon-text'; downBtn.textContent = 'Runter';
+        downBtn.addEventListener('click', async () => { await moveSection(idx, 1); renderHub(); });
+        actionsRow.appendChild(downBtn);
+      }
       const editBtn = document.createElement('button');
       editBtn.type = 'button';
       editBtn.className = 'btn-icon-text hub-card-edit-btn';
       editBtn.textContent = 'Bearbeiten';
+      actionsRow.appendChild(editBtn);
+      cardWrap.appendChild(actionsRow);
+
       const editorWrap = document.createElement('div');
       editorWrap.className = 'hub-card-editor';
 
@@ -481,14 +517,13 @@ function renderHub() {
         else openEditor();
       });
 
-      cardWrap.appendChild(editBtn);
       cardWrap.appendChild(editorWrap);
     }
 
     list.appendChild(cardWrap);
   });
 
-  if (state.isAdmin) {
+  if (isAdminActive()) {
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
     addBtn.className = 'btn btn-secondary hub-add-section-btn';
@@ -508,6 +543,16 @@ function renderHub() {
       }
     });
     list.appendChild(addBtn);
+
+    const dashLink = document.createElement('button');
+    dashLink.type = 'button';
+    dashLink.className = 'btn-icon-text hub-admin-dashboard-link';
+    dashLink.textContent = 'Verwaltung öffnen (Startseite, Design, Gäste, Antworten)';
+    dashLink.addEventListener('click', async () => {
+      try { await loadAdminData(); } catch (err) { console.error(err); }
+      showScreen('#screen-admin');
+    });
+    list.appendChild(dashLink);
   }
 }
 
@@ -529,8 +574,12 @@ function updateAdminButtonVisibility() {
   const name = ((state.currentGuest && state.currentGuest.name) || '').trim().toLowerCase();
   const allowed = ADMIN_VISIBLE_FOR.some(n => name === n || name.includes(n));
   const btn = $('#btn-open-admin');
-  if (state.isAdmin || allowed) {
+  if (state.isAdmin) {
     btn.classList.remove('hidden');
+    btn.textContent = state.adminModeOn ? 'Admin: An' : 'Admin: Aus';
+  } else if (allowed) {
+    btn.classList.remove('hidden');
+    btn.textContent = 'Admin';
   } else {
     btn.classList.add('hidden');
   }
@@ -591,14 +640,29 @@ function renderFaq(cat) {
 function renderAssignments(cat) {
   const wrap = document.createElement('div');
   const list = cat.assignments || [];
-  if (!list.length) {
+
+  // Jede/r Gast sieht hier nur die eigene(n) Zuteilung(en), nicht die
+  // Liste aller Gäste - Admins können weiterhin über "Bearbeiten" alle
+  // Zuteilungen einsehen und verwalten.
+  if (!state.currentGuest) {
     const p = document.createElement('p');
     p.className = 'muted';
-    p.textContent = 'Noch nichts verteilt.';
+    p.textContent = 'Bitte wähle zuerst deinen Namen aus, um deinen Teil zu sehen.';
     wrap.appendChild(p);
     return wrap;
   }
-  list.forEach(item => {
+
+  const guestName = state.currentGuest.name.trim().toLowerCase();
+  const visible = list.filter(item => (item.name || '').trim().toLowerCase() === guestName);
+
+  if (!visible.length) {
+    const p = document.createElement('p');
+    p.className = 'muted';
+    p.textContent = 'Für dich ist aktuell nichts eingetragen.';
+    wrap.appendChild(p);
+    return wrap;
+  }
+  visible.forEach(item => {
     const block = document.createElement('div');
     block.className = 'assignment-item';
     const name = document.createElement('p');
@@ -954,7 +1018,7 @@ async function loadAndRenderGalleryPhotos(categoryId, grid) {
       // Nur im Admin-Modus: ein Foto kann direkt aus der Galerie entfernt
       // werden (löscht nur den Eintrag, nicht zwingend die Originaldatei
       // beim Hosting-Anbieter - das Foto wird aber nirgends mehr angezeigt).
-      if (state.isAdmin) {
+      if (isAdminActive()) {
         const del = document.createElement('button');
         del.type = 'button';
         del.className = 'gallery-download-btn gallery-delete-btn';
@@ -983,6 +1047,25 @@ async function loadAndRenderGalleryPhotos(categoryId, grid) {
   }
 }
 
+// Verschiebt eine Kategorie nur innerhalb ihres eigenen Bereichs nach oben
+// oder unten (nicht global über alle Bereiche hinweg) - wichtig, damit das
+// Verschieben direkt auf der Bereichs-Seite die richtigen Nachbarn trifft.
+async function moveCategoryInSection(sectionCats, idx, dir) {
+  const other = idx + dir;
+  if (other < 0 || other >= sectionCats.length) return;
+  const a = sectionCats[idx];
+  const b = sectionCats[other];
+  try {
+    await updateDoc(doc(db, 'categories', a.id), { order: b.order });
+    await updateDoc(doc(db, 'categories', b.id), { order: a.order });
+    await loadCategories();
+    renderCategories();
+  } catch (err) {
+    console.error('Verschieben fehlgeschlagen:', err);
+    alert('Verschieben hat leider nicht geklappt. Bitte nochmal versuchen.');
+  }
+}
+
 function renderCategories() {
   const list = $('#categories-list');
   list.innerHTML = '';
@@ -992,9 +1075,9 @@ function renderCategories() {
     p.className = 'muted';
     p.textContent = 'Noch keine Inhalte in diesem Bereich.';
     list.appendChild(p);
-    if (!state.isAdmin) return;
+    if (!isAdminActive()) return;
   }
-  filtered.forEach(cat => {
+  filtered.forEach((cat, idx) => {
     // Die Foto-Galerie muss nicht erst aufgeklappt werden - Gäste sollen den
     // Upload-Knopf und bereits hochgeladene Fotos sofort sehen.
     const isFlat = cat.type === 'gallery';
@@ -1019,9 +1102,22 @@ function renderCategories() {
     renderCategoryBody(cat, body);
 
     // Im Admin-Modus lässt sich diese Kategorie direkt hier auf der
-    // Bereichs-Seite bearbeiten, ohne extra in einen separaten
-    // Admin-Bereich wechseln zu müssen.
-    if (state.isAdmin) {
+    // Bereichs-Seite bearbeiten und innerhalb des Bereichs verschieben,
+    // ohne extra in einen separaten Admin-Bereich wechseln zu müssen.
+    if (isAdminActive()) {
+      const actionsWrap = el.querySelector('.category-header-actions');
+      if (idx > 0) {
+        const upBtn = document.createElement('button');
+        upBtn.type = 'button'; upBtn.className = 'btn-icon-text cat-move-btn'; upBtn.textContent = 'Hoch';
+        upBtn.addEventListener('click', (e) => { e.stopPropagation(); moveCategoryInSection(filtered, idx, -1); });
+        actionsWrap.appendChild(upBtn);
+      }
+      if (idx < filtered.length - 1) {
+        const downBtn = document.createElement('button');
+        downBtn.type = 'button'; downBtn.className = 'btn-icon-text cat-move-btn'; downBtn.textContent = 'Runter';
+        downBtn.addEventListener('click', (e) => { e.stopPropagation(); moveCategoryInSection(filtered, idx, 1); });
+        actionsWrap.appendChild(downBtn);
+      }
       const editBtn = document.createElement('button');
       editBtn.type = 'button';
       editBtn.className = 'btn-icon-text cat-edit-btn';
@@ -1031,7 +1127,7 @@ function renderCategories() {
         if (el.classList.contains('editing')) closeEdit();
         else openEdit();
       });
-      el.querySelector('.category-header-actions').appendChild(editBtn);
+      actionsWrap.appendChild(editBtn);
 
       function openEdit() {
         el.classList.add('open', 'editing');
@@ -1057,7 +1153,7 @@ function renderCategories() {
     list.appendChild(el);
   });
 
-  if (state.isAdmin) {
+  if (isAdminActive()) {
     const addWrap = document.createElement('div');
     addWrap.className = 'admin-inline-add';
     const addBtn = document.createElement('button');
@@ -1163,8 +1259,13 @@ async function loadResponsesForCurrentGuest() {
 // ---------------------------------------------------------------
 $('#btn-open-admin').addEventListener('click', async () => {
   if (state.isAdmin) {
-    await loadAdminData();
-    showScreen('#screen-admin');
+    // Schaltet die Bearbeiten-Werkzeuge auf den Gast-Seiten an/aus, ohne
+    // sich auszuloggen - so kann man kurz als Gast vorschauen und wieder
+    // zurückschalten. Der komplette Admin-Bereich (Startseite, Design,
+    // Gästeliste, Antworten) bleibt über den Link auf der Übersicht erreichbar.
+    state.adminModeOn = !state.adminModeOn;
+    updateAdminButtonVisibility();
+    refreshCurrentScreen();
   } else {
     $('#admin-login-modal').classList.remove('hidden');
   }
@@ -1208,6 +1309,7 @@ function refreshCurrentScreen() {
 
 onAuthStateChanged(auth, async (user) => {
   state.isAdmin = !!user;
+  if (user) state.adminModeOn = true;
   updateAdminButtonVisibility();
   if (user) {
     try {
@@ -1523,6 +1625,23 @@ function buildCategoryEditor(cat, opts) {
           localFields.splice(fi, 1);
           renderFieldsEditor();
         });
+        const fieldRemoveBtn = rowWrap.querySelector('[data-remove-field]');
+        if (fi > 0) {
+          const upBtn = document.createElement('button');
+          upBtn.type = 'button';
+          upBtn.className = 'btn-icon-text';
+          upBtn.textContent = 'Hoch';
+          upBtn.addEventListener('click', () => { moveInArray(localFields, fi, -1); renderFieldsEditor(); });
+          fieldRemoveBtn.parentNode.insertBefore(upBtn, fieldRemoveBtn);
+        }
+        if (fi < localFields.length - 1) {
+          const downBtn = document.createElement('button');
+          downBtn.type = 'button';
+          downBtn.className = 'btn-icon-text';
+          downBtn.textContent = 'Runter';
+          downBtn.addEventListener('click', () => { moveInArray(localFields, fi, 1); renderFieldsEditor(); });
+          fieldRemoveBtn.parentNode.insertBefore(downBtn, fieldRemoveBtn);
+        }
 
         const optionsEditor = rowWrap.querySelector('.field-options-editor');
         function renderOptionsEditor() {
@@ -1541,6 +1660,23 @@ function buildCategoryEditor(cat, opts) {
               localFields[fi].options.splice(oi, 1);
               renderOptionsEditor();
             });
+            const optRemoveBtn = orow.querySelector('[data-remove-opt]');
+            if (oi > 0) {
+              const upBtn = document.createElement('button');
+              upBtn.type = 'button';
+              upBtn.className = 'btn-icon-text';
+              upBtn.textContent = 'Hoch';
+              upBtn.addEventListener('click', () => { moveInArray(localFields[fi].options, oi, -1); renderOptionsEditor(); });
+              optRemoveBtn.parentNode.insertBefore(upBtn, optRemoveBtn);
+            }
+            if (oi < (localFields[fi].options || []).length - 1) {
+              const downBtn = document.createElement('button');
+              downBtn.type = 'button';
+              downBtn.className = 'btn-icon-text';
+              downBtn.textContent = 'Runter';
+              downBtn.addEventListener('click', () => { moveInArray(localFields[fi].options, oi, 1); renderOptionsEditor(); });
+              optRemoveBtn.parentNode.insertBefore(downBtn, optRemoveBtn);
+            }
             optionsEditor.appendChild(orow);
           });
           if (!(localFields[fi].options || []).length) {
@@ -1579,6 +1715,23 @@ function buildCategoryEditor(cat, opts) {
           localQna.splice(qi, 1);
           renderQnaEditor();
         });
+        const qnaRemoveBtn = row.querySelector('[data-remove-qna]');
+        if (qi > 0) {
+          const upBtn = document.createElement('button');
+          upBtn.type = 'button';
+          upBtn.className = 'btn-icon-text';
+          upBtn.textContent = 'Hoch';
+          upBtn.addEventListener('click', () => { moveInArray(localQna, qi, -1); renderQnaEditor(); });
+          qnaRemoveBtn.parentNode.insertBefore(upBtn, qnaRemoveBtn);
+        }
+        if (qi < localQna.length - 1) {
+          const downBtn = document.createElement('button');
+          downBtn.type = 'button';
+          downBtn.className = 'btn-icon-text';
+          downBtn.textContent = 'Runter';
+          downBtn.addEventListener('click', () => { moveInArray(localQna, qi, 1); renderQnaEditor(); });
+          qnaRemoveBtn.parentNode.insertBefore(downBtn, qnaRemoveBtn);
+        }
         qnaEditor.appendChild(row);
       });
     }
@@ -1599,6 +1752,23 @@ function buildCategoryEditor(cat, opts) {
           localItems.splice(ii, 1);
           renderItemsEditor();
         });
+        const itemRemoveBtn = row.querySelector('[data-remove-item]');
+        if (ii > 0) {
+          const upBtn = document.createElement('button');
+          upBtn.type = 'button';
+          upBtn.className = 'btn-icon-text';
+          upBtn.textContent = 'Hoch';
+          upBtn.addEventListener('click', () => { moveInArray(localItems, ii, -1); renderItemsEditor(); });
+          itemRemoveBtn.parentNode.insertBefore(upBtn, itemRemoveBtn);
+        }
+        if (ii < localItems.length - 1) {
+          const downBtn = document.createElement('button');
+          downBtn.type = 'button';
+          downBtn.className = 'btn-icon-text';
+          downBtn.textContent = 'Runter';
+          downBtn.addEventListener('click', () => { moveInArray(localItems, ii, 1); renderItemsEditor(); });
+          itemRemoveBtn.parentNode.insertBefore(downBtn, itemRemoveBtn);
+        }
         itemsEditor.appendChild(row);
       });
     }
@@ -1621,6 +1791,23 @@ function buildCategoryEditor(cat, opts) {
           localAssignments.splice(ai, 1);
           renderAssignmentsEditor();
         });
+        const assignmentRemoveBtn = row.querySelector('[data-remove-assignment]');
+        if (ai > 0) {
+          const upBtn = document.createElement('button');
+          upBtn.type = 'button';
+          upBtn.className = 'btn-icon-text';
+          upBtn.textContent = 'Hoch';
+          upBtn.addEventListener('click', () => { moveInArray(localAssignments, ai, -1); renderAssignmentsEditor(); });
+          assignmentRemoveBtn.parentNode.insertBefore(upBtn, assignmentRemoveBtn);
+        }
+        if (ai < localAssignments.length - 1) {
+          const downBtn = document.createElement('button');
+          downBtn.type = 'button';
+          downBtn.className = 'btn-icon-text';
+          downBtn.textContent = 'Runter';
+          downBtn.addEventListener('click', () => { moveInArray(localAssignments, ai, 1); renderAssignmentsEditor(); });
+          assignmentRemoveBtn.parentNode.insertBefore(downBtn, assignmentRemoveBtn);
+        }
         assignmentsEditor.appendChild(row);
       });
     }
