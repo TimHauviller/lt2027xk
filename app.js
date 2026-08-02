@@ -717,6 +717,40 @@ function renderFormFields(cat) {
     label.textContent = f.label;
     group.appendChild(label);
 
+    // Mehrfachauswahl: Gäste können hier beliebig viele Optionen anklicken
+    // (z.B. mehrere Lieblingsgetränke), statt nur eine einzige auszuwählen.
+    if (f.type === 'multiselect') {
+      const existingArr = Array.isArray(existing[f.key]) ? existing[f.key] : [];
+      const optsWrap = document.createElement('div');
+      optsWrap.className = 'multiselect-group';
+      (f.options || []).forEach(opt => {
+        const optRow = document.createElement('label');
+        optRow.className = 'multiselect-option';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = opt;
+        cb.checked = existingArr.includes(opt);
+        cb.addEventListener('change', () => {
+          const checked = Array.from(optsWrap.querySelectorAll('input[type=checkbox]:checked')).map(c => c.value);
+          saveGuestAnswer(cat.id, f.key, checked);
+        });
+        const span = document.createElement('span');
+        span.textContent = opt;
+        optRow.appendChild(cb);
+        optRow.appendChild(span);
+        optsWrap.appendChild(optRow);
+      });
+      if (!(f.options || []).length) {
+        const hint = document.createElement('p');
+        hint.className = 'muted small';
+        hint.textContent = 'Noch keine Auswahlmöglichkeiten hinterlegt.';
+        optsWrap.appendChild(hint);
+      }
+      group.appendChild(optsWrap);
+      wrap.appendChild(group);
+      return;
+    }
+
     let input;
     if (f.type === 'select') {
       input = document.createElement('select');
@@ -909,13 +943,38 @@ async function loadAndRenderGalleryPhotos(categoryId, grid) {
       img.src = data.url;
       img.alt = '';
       img.loading = 'lazy';
+      const actions = document.createElement('div');
+      actions.className = 'gallery-item-actions';
       const dl = document.createElement('button');
       dl.type = 'button';
       dl.className = 'gallery-download-btn';
       dl.textContent = 'Herunterladen';
       dl.addEventListener('click', () => downloadPhoto(data.url, filename));
+      actions.appendChild(dl);
+      // Nur im Admin-Modus: ein Foto kann direkt aus der Galerie entfernt
+      // werden (löscht nur den Eintrag, nicht zwingend die Originaldatei
+      // beim Hosting-Anbieter - das Foto wird aber nirgends mehr angezeigt).
+      if (state.isAdmin) {
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'gallery-download-btn gallery-delete-btn';
+        del.textContent = 'Löschen';
+        del.addEventListener('click', async () => {
+          if (!confirm('Dieses Foto wirklich aus der Galerie löschen?')) return;
+          del.disabled = true;
+          try {
+            await deleteDoc(doc(db, 'photos', d.id));
+            await loadAndRenderGalleryPhotos(categoryId, grid);
+          } catch (err) {
+            console.error('Foto konnte nicht gelöscht werden:', err);
+            alert('Löschen hat leider nicht geklappt. Bitte nochmal versuchen.');
+            del.disabled = false;
+          }
+        });
+        actions.appendChild(del);
+      }
       item.appendChild(img);
-      item.appendChild(dl);
+      item.appendChild(actions);
       grid.appendChild(item);
     });
   } catch (err) {
@@ -936,8 +995,11 @@ function renderCategories() {
     if (!state.isAdmin) return;
   }
   filtered.forEach(cat => {
+    // Die Foto-Galerie muss nicht erst aufgeklappt werden - Gäste sollen den
+    // Upload-Knopf und bereits hochgeladene Fotos sofort sehen.
+    const isFlat = cat.type === 'gallery';
     const el = document.createElement('div');
-    el.className = 'category';
+    el.className = 'category' + (isFlat ? ' category--flat open' : '');
     el.innerHTML = `
       <div class="category-header">
         <span>${escapeHtml(cat.title)}</span>
@@ -947,10 +1009,12 @@ function renderCategories() {
       <div class="category-body"></div>
     `;
     const headerEl = el.querySelector('.category-header');
-    headerEl.addEventListener('click', (e) => {
-      if (e.target.closest('.cat-edit-btn')) return;
-      el.classList.toggle('open');
-    });
+    if (!isFlat) {
+      headerEl.addEventListener('click', (e) => {
+        if (e.target.closest('.cat-edit-btn')) return;
+        el.classList.toggle('open');
+      });
+    }
     const body = el.querySelector('.category-body');
     renderCategoryBody(cat, body);
 
@@ -1436,11 +1500,12 @@ function buildCategoryEditor(cat, opts) {
             <select data-ftype style="width:20%">
               <option value="text" ${f.type === 'text' ? 'selected' : ''}>Text</option>
               <option value="textarea" ${f.type === 'textarea' ? 'selected' : ''}>Mehrzeilig</option>
-              <option value="select" ${f.type === 'select' ? 'selected' : ''}>Auswahl</option>
+              <option value="select" ${f.type === 'select' ? 'selected' : ''}>Auswahl (eine Option)</option>
+              <option value="multiselect" ${f.type === 'multiselect' ? 'selected' : ''}>Mehrfachauswahl (mehrere Optionen)</option>
             </select>
             <button type="button" class="btn-icon-text" data-remove-field>Entfernen</button>
           </div>
-          <div class="field-options-block" style="${f.type === 'select' ? '' : 'display:none'}">
+          <div class="field-options-block" style="${(f.type === 'select' || f.type === 'multiselect') ? '' : 'display:none'}">
             <label class="field-options-label">Auswahlmöglichkeiten (das können Gäste auswählen)</label>
             <div class="field-options-editor"></div>
             <button type="button" class="btn-icon-text btn-small" data-add-option>+ Auswahlmöglichkeit hinzufügen</button>
@@ -1452,7 +1517,7 @@ function buildCategoryEditor(cat, opts) {
         const optsBlock = rowWrap.querySelector('.field-options-block');
         typeSel.addEventListener('change', e => {
           localFields[fi].type = e.target.value;
-          optsBlock.style.display = e.target.value === 'select' ? '' : 'none';
+          optsBlock.style.display = (e.target.value === 'select' || e.target.value === 'multiselect') ? '' : 'none';
         });
         rowWrap.querySelector('[data-remove-field]').addEventListener('click', () => {
           localFields.splice(fi, 1);
@@ -1766,7 +1831,7 @@ function renderAdminResponses() {
   state.responses.forEach(r => {
     const answers = Object.entries(r.answers || {}).map(([catId, vals]) => {
       const title = catTitles[catId] || catId;
-      const inner = Object.entries(vals).map(([k, v]) => `${k}: ${v}`).join(', ');
+      const inner = Object.entries(vals).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join(', ');
       return `<strong>${escapeHtml(title)}:</strong> ${escapeHtml(inner)}`;
     }).join('<br>') || '<span class="muted">–</span>';
 
@@ -1789,7 +1854,7 @@ $('#btn-export-csv').addEventListener('click', () => {
   state.responses.forEach(r => {
     Object.entries(r.answers || {}).forEach(([catId, vals]) => {
       Object.entries(vals).forEach(([k, v]) => {
-        rows.push([r.guestName || r.id, catTitles[catId] || catId, k, v]);
+        rows.push([r.guestName || r.id, catTitles[catId] || catId, k, Array.isArray(v) ? v.join(', ') : v]);
       });
     });
     Object.entries(r.checklist || {}).forEach(([catId, checked]) => {
