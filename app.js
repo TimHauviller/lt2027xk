@@ -92,8 +92,7 @@ function renderConfig() {
   if (c.photoUrl) {
     $('#landing-photo').style.backgroundImage = `url(${c.photoUrl})`;
   }
-  const marqueeText = `${c.title || 'Lucie & Timmy'}  •  Toskana, Italien  •  ${c.intro || ''}  •  `;
-  $('#marquee-track').textContent = marqueeText.repeat(4);
+  $('#marquee-track').textContent = `${c.title || 'Lucie & Timmy'}  •  Toskana, Italien  •  ${c.intro || ''}`;
   // Admin-Formular vorbefüllen
   $('#cfg-title').value = c.title || '';
   $('#cfg-subtitle').value = c.subtitle || '';
