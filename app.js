@@ -703,37 +703,41 @@ function getGuestChecklist(catId) {
   return resp.checklist[catId];
 }
 
+// Wirft den Fehler bewusst weiter (statt ihn selbst abzufangen), damit der
+// aufrufende "Speichern"-Button über withSaveFeedback ein klares Erfolgs-
+// oder Fehler-Feedback anzeigen kann, statt dass hier schon ein Alert
+// aufploppt und der Button trotzdem "erfolgreich" aussieht.
 async function saveGuestChecklist(categoryId, checkedIds) {
   if (!state.currentGuest) return;
+  const ref = doc(db, 'responses', state.currentGuest.id);
+  const updatePayload = {
+    [`checklist.${categoryId}`]: checkedIds,
+    guestName: state.currentGuest.name,
+    updatedAt: new Date().toISOString()
+  };
   try {
-    const ref = doc(db, 'responses', state.currentGuest.id);
-    // Gleicher Grund wie bei saveGuestAnswer: gezielt per Punkt-Pfad
-    // schreiben statt lesen+komplett-neu-schreiben, damit schnell
-    // hintereinander angeklickte Haken sich nicht gegenseitig überschreiben.
-    const updatePayload = {
-      [`checklist.${categoryId}`]: checkedIds,
+    await updateDoc(ref, updatePayload);
+  } catch (updateErr) {
+    await setDoc(ref, {
       guestName: state.currentGuest.name,
+      checklist: { [categoryId]: checkedIds },
       updatedAt: new Date().toISOString()
-    };
-    try {
-      await updateDoc(ref, updatePayload);
-    } catch (updateErr) {
-      await setDoc(ref, {
-        guestName: state.currentGuest.name,
-        checklist: { [categoryId]: checkedIds },
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-    }
-  } catch (err) {
-    console.error('Fortschritt konnte nicht gespeichert werden:', err);
-    alert('Dein Fortschritt konnte leider nicht gespeichert werden. Bitte versuch es gleich nochmal.');
+    }, { merge: true });
   }
 }
 
+// Checklisten werden erst beim Klick auf "Speichern" tatsächlich nach
+// Firestore geschrieben (nicht mehr sofort bei jedem Häkchen). So gibt es
+// einen klar sichtbaren Moment, an dem die Angaben wirklich gespeichert
+// sind - und danach sind die Haken gesperrt, bis man bewusst auf "Ändern"
+// klickt. Das verhindert, dass jemand die Seite verlässt und erst danach
+// merkt, dass unterwegs nichts angekommen ist.
 function renderChecklist(cat) {
   const wrap = document.createElement('div');
   const items = cat.items || [];
-  const checkedIds = getGuestChecklist(cat.id);
+  const savedIds = getGuestChecklist(cat.id);
+  const draft = savedIds.slice();
+  let locked = savedIds.length > 0;
 
   const progressWrap = document.createElement('div');
   progressWrap.className = 'progress-wrap';
@@ -750,28 +754,29 @@ function renderChecklist(cat) {
 
   function updateProgress() {
     const total = items.length;
-    const done = items.filter(it => checkedIds.includes(it.key)).length;
+    const done = items.filter(it => draft.includes(it.key)).length;
     const pct = total ? Math.round((done / total) * 100) : 0;
     fill.style.width = pct + '%';
     label.textContent = `${pct}% erledigt (${done}/${total})`;
   }
 
+  const checkboxes = [];
   items.forEach(it => {
     const row = document.createElement('label');
     row.className = 'checklist-item';
     const cb = document.createElement('input');
     cb.type = 'checkbox';
-    cb.checked = checkedIds.includes(it.key);
-    cb.addEventListener('change', async () => {
+    cb.checked = draft.includes(it.key);
+    cb.addEventListener('change', () => {
       if (cb.checked) {
-        if (!checkedIds.includes(it.key)) checkedIds.push(it.key);
+        if (!draft.includes(it.key)) draft.push(it.key);
       } else {
-        const i = checkedIds.indexOf(it.key);
-        if (i > -1) checkedIds.splice(i, 1);
+        const i = draft.indexOf(it.key);
+        if (i > -1) draft.splice(i, 1);
       }
       updateProgress();
-      await saveGuestChecklist(cat.id, checkedIds);
     });
+    checkboxes.push(cb);
     const span = document.createElement('span');
     span.textContent = it.label;
     row.appendChild(cb);
@@ -779,26 +784,84 @@ function renderChecklist(cat) {
     wrap.appendChild(row);
   });
 
+  const actionsRow = document.createElement('div');
+  actionsRow.className = 'form-save-row';
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.className = 'btn btn-primary';
+  saveBtn.textContent = 'Speichern';
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.className = 'btn btn-secondary hidden';
+  editBtn.textContent = 'Ändern';
+  actionsRow.appendChild(saveBtn);
+  actionsRow.appendChild(editBtn);
+
+  const statusEl = document.createElement('p');
+  statusEl.className = 'saved-hint';
+
+  function setLocked(isLocked) {
+    locked = isLocked;
+    checkboxes.forEach(cb => { cb.disabled = isLocked; });
+    saveBtn.classList.toggle('hidden', isLocked);
+    editBtn.classList.toggle('hidden', !isLocked);
+    statusEl.textContent = isLocked ? 'Gespeichert.' : '';
+  }
+
+  saveBtn.addEventListener('click', async () => {
+    if (!state.currentGuest) {
+      alert('Bitte wähle zuerst deinen Namen aus, um deinen Fortschritt zu speichern.');
+      return;
+    }
+    const ok = await withSaveFeedback(
+      saveBtn,
+      () => saveGuestChecklist(cat.id, draft),
+      'Dein Fortschritt konnte leider nicht gespeichert werden. Bitte versuch es gleich nochmal.'
+    );
+    if (ok) setLocked(true);
+  });
+  editBtn.addEventListener('click', () => setLocked(false));
+
   if (!items.length) {
     const p = document.createElement('p');
     p.className = 'muted';
     p.textContent = 'Noch keine Punkte hinterlegt.';
     wrap.appendChild(p);
-  } else if (!state.currentGuest) {
-    const hint = document.createElement('p');
-    hint.className = 'saved-hint';
-    hint.textContent = 'Bitte wähle zuerst deinen Namen aus, um deinen Fortschritt zu speichern.';
-    wrap.appendChild(hint);
+  } else {
+    wrap.appendChild(actionsRow);
+    wrap.appendChild(statusEl);
+    if (!state.currentGuest) {
+      statusEl.textContent = 'Bitte wähle zuerst deinen Namen aus, um deinen Fortschritt zu speichern.';
+    }
+    setLocked(locked);
   }
 
   updateProgress();
   return wrap;
 }
 
+// Formulare (z.B. "Essen & Getränke") werden erst beim Klick auf
+// "Speichern" tatsächlich nach Firestore geschrieben - nicht mehr einzeln
+// pro Feld beim Verlassen ("blur"). Grund: wurde eine Seite gewechselt,
+// bevor ein Feld regulär verlassen wurde (z.B. direkt auf "Zurück zur
+// Übersicht" getippt), feuerte das change-Event teils gar nicht mehr, und
+// die Eingabe ging scheinbar spurlos verloren. Ein expliziter Button, der
+// alle Felder auf einmal speichert und danach klar "Gespeichert." anzeigt,
+// macht das zuverlässig und für die Gäste sichtbar. Nach dem Speichern
+// werden die Felder gesperrt; über "Ändern" lassen sie sich erneut
+// bearbeiten.
 function renderFormFields(cat) {
   const wrap = document.createElement('div');
   const resp = state.currentGuest ? state.responses.find(r => r.id === state.currentGuest.id) : null;
   const existing = (resp && resp.answers && resp.answers[cat.id]) || {};
+  const draft = { ...existing };
+  const hasExistingAnswer = (cat.fields || []).some(f => {
+    const v = draft[f.key];
+    return Array.isArray(v) ? v.length > 0 : (v || '').toString().trim() !== '';
+  });
+  let locked = hasExistingAnswer;
+
+  const inputs = []; // { type, el, container }
 
   (cat.fields || []).forEach(f => {
     const group = document.createElement('div');
@@ -810,7 +873,7 @@ function renderFormFields(cat) {
     // Mehrfachauswahl: Gäste können hier beliebig viele Optionen anklicken
     // (z.B. mehrere Lieblingsgetränke), statt nur eine einzige auszuwählen.
     if (f.type === 'multiselect') {
-      const existingArr = Array.isArray(existing[f.key]) ? existing[f.key] : [];
+      const existingArr = Array.isArray(draft[f.key]) ? draft[f.key] : [];
       const optsWrap = document.createElement('div');
       optsWrap.className = 'multiselect-group';
       (f.options || []).forEach(opt => {
@@ -821,8 +884,7 @@ function renderFormFields(cat) {
         cb.value = opt;
         cb.checked = existingArr.includes(opt);
         cb.addEventListener('change', () => {
-          const checked = Array.from(optsWrap.querySelectorAll('input[type=checkbox]:checked')).map(c => c.value);
-          saveGuestAnswer(cat.id, f.key, checked);
+          draft[f.key] = Array.from(optsWrap.querySelectorAll('input[type=checkbox]:checked')).map(c => c.value);
         });
         const span = document.createElement('span');
         span.textContent = opt;
@@ -838,6 +900,7 @@ function renderFormFields(cat) {
       }
       group.appendChild(optsWrap);
       wrap.appendChild(group);
+      inputs.push({ type: 'multiselect', container: optsWrap });
       return;
     }
 
@@ -846,57 +909,100 @@ function renderFormFields(cat) {
       input = document.createElement('select');
       input.innerHTML = '<option value="">– Bitte wählen –</option>' +
         (f.options || []).map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('');
-      input.value = existing[f.key] || '';
+      input.value = draft[f.key] || '';
     } else if (f.type === 'textarea') {
       input = document.createElement('textarea');
       input.rows = 2;
-      input.value = existing[f.key] || '';
+      input.value = draft[f.key] || '';
     } else {
       input = document.createElement('input');
       input.type = 'text';
-      input.value = existing[f.key] || '';
+      input.value = draft[f.key] || '';
     }
-    input.addEventListener('change', () => saveGuestAnswer(cat.id, f.key, input.value));
+    input.addEventListener('input', () => { draft[f.key] = input.value; });
+    input.addEventListener('change', () => { draft[f.key] = input.value; });
     group.appendChild(input);
     wrap.appendChild(group);
+    inputs.push({ type: f.type, el: input });
   });
 
-  const hint = document.createElement('p');
-  hint.className = 'saved-hint';
-  hint.textContent = state.currentGuest ? '' : 'Bitte wähle zuerst deinen Namen aus, um Angaben zu speichern.';
-  wrap.appendChild(hint);
+  const actionsRow = document.createElement('div');
+  actionsRow.className = 'form-save-row';
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.className = 'btn btn-primary';
+  saveBtn.textContent = 'Speichern';
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.className = 'btn btn-secondary hidden';
+  editBtn.textContent = 'Ändern';
+  actionsRow.appendChild(saveBtn);
+  actionsRow.appendChild(editBtn);
+
+  const statusEl = document.createElement('p');
+  statusEl.className = 'saved-hint';
+
+  function setLocked(isLocked) {
+    locked = isLocked;
+    inputs.forEach(item => {
+      if (item.type === 'multiselect') {
+        item.container.querySelectorAll('input[type=checkbox]').forEach(cb => { cb.disabled = isLocked; });
+      } else {
+        item.el.disabled = isLocked;
+      }
+    });
+    saveBtn.classList.toggle('hidden', isLocked);
+    editBtn.classList.toggle('hidden', !isLocked);
+    statusEl.textContent = isLocked ? 'Gespeichert.' : '';
+  }
+
+  saveBtn.addEventListener('click', async () => {
+    if (!state.currentGuest) {
+      alert('Bitte wähle zuerst deinen Namen aus, um Angaben zu speichern.');
+      return;
+    }
+    const ok = await withSaveFeedback(
+      saveBtn,
+      () => saveGuestFormAnswers(cat.id, draft),
+      'Deine Angaben konnten leider nicht gespeichert werden. Bitte versuch es gleich nochmal.'
+    );
+    if (ok) setLocked(true);
+  });
+  editBtn.addEventListener('click', () => setLocked(false));
+
+  if ((cat.fields || []).length) {
+    wrap.appendChild(actionsRow);
+    wrap.appendChild(statusEl);
+    if (!state.currentGuest) {
+      statusEl.textContent = 'Bitte wähle zuerst deinen Namen aus, um Angaben zu speichern.';
+    }
+    setLocked(locked);
+  }
+
   return wrap;
 }
 
-async function saveGuestAnswer(categoryId, key, value) {
+// Schreibt alle Felder einer Kategorie in einem Rutsch (statt Feld für
+// Feld) - wird ausschließlich vom "Speichern"-Button in renderFormFields
+// aufgerufen. Wirft den Fehler bewusst weiter, damit withSaveFeedback ein
+// klares Erfolgs-/Fehler-Feedback am Button zeigen kann.
+async function saveGuestFormAnswers(categoryId, values) {
   if (!state.currentGuest) return;
+  const ref = doc(db, 'responses', state.currentGuest.id);
+  const updatePayload = {
+    [`answers.${categoryId}`]: values,
+    guestName: state.currentGuest.name,
+    updatedAt: new Date().toISOString()
+  };
   try {
-    const ref = doc(db, 'responses', state.currentGuest.id);
-    // Wichtig: gezielt nur dieses eine Feld per Punkt-Pfad aktualisieren,
-    // statt das ganze Dokument zu lesen und komplett neu zu schreiben. Beim
-    // "Lesen, ändern, komplett neu schreiben"-Muster gingen Antworten
-    // verloren, wenn z.B. bei einer Mehrfachauswahl mehrere Haken kurz
-    // hintereinander gesetzt wurden (jeder Klick löste einen eigenen
-    // Speichervorgang aus, und der zuletzt fertige überschrieb dabei die
-    // Änderungen der anderen, noch laufenden Speichervorgänge).
-    const updatePayload = {
-      [`answers.${categoryId}.${key}`]: value,
+    await updateDoc(ref, updatePayload);
+  } catch (updateErr) {
+    // Dokument existiert für diesen Gast noch nicht - einmalig anlegen.
+    await setDoc(ref, {
       guestName: state.currentGuest.name,
+      answers: { [categoryId]: values },
       updatedAt: new Date().toISOString()
-    };
-    try {
-      await updateDoc(ref, updatePayload);
-    } catch (updateErr) {
-      // Dokument existiert für diesen Gast noch nicht - einmalig anlegen.
-      await setDoc(ref, {
-        guestName: state.currentGuest.name,
-        answers: { [categoryId]: { [key]: value } },
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-    }
-  } catch (err) {
-    console.error('Antwort konnte nicht gespeichert werden:', err);
-    alert('Deine Angabe konnte leider nicht gespeichert werden. Bitte versuch es gleich nochmal.');
+    }, { merge: true });
   }
 }
 
