@@ -1027,6 +1027,8 @@ function renderCategoryBody(cat, body) {
     body.appendChild(renderGalleryUpload(cat));
   } else if (cat.type === 'assignment') {
     body.appendChild(renderAssignments(cat));
+  } else if (Array.isArray(cat.tabs) && cat.tabs.length) {
+    body.appendChild(renderInfoTabs(cat));
   } else {
     const p = document.createElement('div');
     p.innerHTML = escapeHtml(cat.content || '').replace(/\n/g, '<br>');
@@ -1034,6 +1036,48 @@ function renderCategoryBody(cat, body) {
   }
   const gal = renderImages(cat.images);
   if (gal) body.appendChild(gal);
+}
+
+// Umschaltbare Reiter ("Bubbles") innerhalb einer Info-Kategorie: eine Reihe
+// kleiner Pillen ganz oben, ein Klick tauscht Überschrift + Text darunter
+// aus. Das Bild der Kategorie (falls vorhanden) bleibt davon unberührt und
+// wird von renderCategoryBody() unabhängig vom gewählten Reiter angehängt.
+function renderInfoTabs(cat) {
+  const wrap = document.createElement('div');
+  wrap.className = 'info-tabs';
+
+  const tabRow = document.createElement('div');
+  tabRow.className = 'info-tabs-row';
+  const headingEl = document.createElement('h3');
+  headingEl.className = 'info-tabs-heading';
+  const textEl = document.createElement('div');
+  textEl.className = 'info-tabs-text';
+
+  let activeIdx = 0;
+
+  function renderActive() {
+    const tab = cat.tabs[activeIdx] || {};
+    headingEl.textContent = tab.heading || tab.label || '';
+    textEl.innerHTML = escapeHtml(tab.text || '').replace(/\n/g, '<br>');
+    Array.from(tabRow.children).forEach((btn, i) => {
+      btn.classList.toggle('active', i === activeIdx);
+    });
+  }
+
+  cat.tabs.forEach((tab, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'info-tab-pill';
+    btn.textContent = tab.label || `Reiter ${i + 1}`;
+    btn.addEventListener('click', () => { activeIdx = i; renderActive(); });
+    tabRow.appendChild(btn);
+  });
+
+  wrap.appendChild(tabRow);
+  wrap.appendChild(headingEl);
+  wrap.appendChild(textEl);
+  renderActive();
+  return wrap;
 }
 
 // ---------------------------------------------------------------
@@ -1762,6 +1806,15 @@ function buildCategoryEditor(cat, opts) {
       <div class="cat-block cat-block-info">
         <label>Inhalt</label>
         <textarea data-field="content" rows="3">${escapeHtml(cat.content || '')}</textarea>
+        <label class="checkbox-label">
+          <input type="checkbox" data-field="useTabs" ${cat.tabs && cat.tabs.length ? 'checked' : ''}>
+          Mit umschaltbaren Reitern (Bubbles) statt normalem Text
+        </label>
+        <div class="cat-block-tabs" style="${cat.tabs && cat.tabs.length ? '' : 'display:none'}">
+          <label>Reiter (Bubble-Beschriftung, Überschrift und Text je Reiter)</label>
+          <div class="tabs-editor"></div>
+          <button type="button" class="btn-icon-text btn-small" data-action="add-tab">+ Reiter hinzufügen</button>
+        </div>
       </div>
 
       <div class="cat-block cat-block-faq">
@@ -1826,6 +1879,7 @@ function buildCategoryEditor(cat, opts) {
     let localQna = JSON.parse(JSON.stringify(cat.qna || []));
     let localItems = JSON.parse(JSON.stringify(cat.items || []));
     let localAssignments = JSON.parse(JSON.stringify(cat.assignments || []));
+    let localTabs = JSON.parse(JSON.stringify(cat.tabs || []));
 
     // Formularfelder: bei Auswahl-Feldern ("select") gibt es pro Feld eine
     // eigene Liste mit einzelnen, entfernbaren Auswahlmöglichkeiten statt
@@ -2060,6 +2114,59 @@ function buildCategoryEditor(cat, opts) {
       renderAssignmentsEditor();
     });
 
+    // Reiter ("Bubbles") einer Info-Kategorie: pro Reiter eine kurze
+    // Bubble-Beschriftung, eine (meist gleichlautende) Überschrift und der
+    // eigentliche Fließtext, der beim Anklicken der Bubble erscheint.
+    const tabsBlock = el.querySelector('.cat-block-tabs');
+    const useTabsCheckbox = el.querySelector('[data-field="useTabs"]');
+    const tabsEditor = el.querySelector('.tabs-editor');
+    function renderTabsEditor() {
+      tabsEditor.innerHTML = '';
+      localTabs.forEach((tab, ti) => {
+        const row = document.createElement('div');
+        row.className = 'tab-edit-row';
+        row.innerHTML = `
+          <input type="text" placeholder="Bubble-Beschriftung (z.B. Zimmeraufteilung)" data-tlabel value="${escapeHtml(tab.label || '')}">
+          <input type="text" placeholder="Überschrift (meist gleich wie die Beschriftung)" data-theading value="${escapeHtml(tab.heading || '')}">
+          <textarea placeholder="Text" rows="3" data-ttext>${escapeHtml(tab.text || '')}</textarea>
+          <button type="button" class="btn-icon-text" data-remove-tab>Entfernen</button>
+        `;
+        row.querySelector('[data-tlabel]').addEventListener('input', e => localTabs[ti].label = e.target.value);
+        row.querySelector('[data-theading]').addEventListener('input', e => localTabs[ti].heading = e.target.value);
+        row.querySelector('[data-ttext]').addEventListener('input', e => localTabs[ti].text = e.target.value);
+        row.querySelector('[data-remove-tab]').addEventListener('click', () => {
+          localTabs.splice(ti, 1);
+          renderTabsEditor();
+        });
+        const tabRemoveBtn = row.querySelector('[data-remove-tab]');
+        if (ti > 0) {
+          const upBtn = document.createElement('button');
+          upBtn.type = 'button';
+          upBtn.className = 'btn-icon-text';
+          upBtn.textContent = 'Hoch';
+          upBtn.addEventListener('click', () => { moveInArray(localTabs, ti, -1); renderTabsEditor(); });
+          tabRemoveBtn.parentNode.insertBefore(upBtn, tabRemoveBtn);
+        }
+        if (ti < localTabs.length - 1) {
+          const downBtn = document.createElement('button');
+          downBtn.type = 'button';
+          downBtn.className = 'btn-icon-text';
+          downBtn.textContent = 'Runter';
+          downBtn.addEventListener('click', () => { moveInArray(localTabs, ti, 1); renderTabsEditor(); });
+          tabRemoveBtn.parentNode.insertBefore(downBtn, tabRemoveBtn);
+        }
+        tabsEditor.appendChild(row);
+      });
+    }
+    renderTabsEditor();
+    useTabsCheckbox.addEventListener('change', () => {
+      tabsBlock.style.display = useTabsCheckbox.checked ? '' : 'none';
+    });
+    el.querySelector('[data-action="add-tab"]').addEventListener('click', () => {
+      localTabs.push({ label: '', heading: '', text: '' });
+      renderTabsEditor();
+    });
+
     el.querySelector('[data-action="add-field"]').addEventListener('click', () => {
       localFields.push({ key: '', label: '', type: 'text', options: [] });
       renderFieldsEditor();
@@ -2108,6 +2215,9 @@ function buildCategoryEditor(cat, opts) {
       };
       if (type === 'info' || type === 'day') {
         updated.content = el.querySelector('[data-field="content"]').value;
+        updated.tabs = useTabsCheckbox.checked
+          ? localTabs.filter(t => (t.label || '').trim() || (t.heading || '').trim() || (t.text || '').trim())
+          : [];
       } else if (type === 'faq') {
         updated.qna = localQna.filter(q => (q.question || '').trim() && (q.answer || '').trim());
       } else if (type === 'form') {

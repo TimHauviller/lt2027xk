@@ -362,6 +362,27 @@ label { font-size: 0.85rem; color: var(--muted); display: block; margin-top: 0.5
 .checklist-item input[type=checkbox] { width: 18px; height: 18px; flex-shrink: 0; }
 .checklist-item input[type=checkbox]:disabled { opacity: 0.7; cursor: not-allowed; }
 
+/* Umschaltbare Reiter ("Bubbles") innerhalb einer Info-Kategorie, z.B.
+   "Unsere Unterkunft" / "Zimmeraufteilung" / "Ausstattung" / "An- und
+   Abreise" - Klick auf eine Bubble tauscht Überschrift und Text aus. */
+.info-tabs-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.1rem; }
+.info-tab-pill {
+  font-family: inherit; font-size: 0.85rem; padding: 0.45rem 1.1rem;
+  border-radius: 999px; border: 1px solid var(--border); background: #fff;
+  color: var(--muted); cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.info-tab-pill:hover { background: var(--cream); color: var(--text); }
+.info-tab-pill.active { background: var(--grape); border-color: var(--grape); color: #fff; }
+.info-tabs-heading { margin: 0 0 0.5rem; color: var(--grape); }
+.info-tabs-text { line-height: 1.6; }
+
+/* Admin-Editor für die Reiter (Tabs) einer Info-Kategorie */
+.tab-edit-row {
+  border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; margin-bottom: 0.5rem;
+}
+.tab-edit-row input, .tab-edit-row textarea { margin: 0 0 0.4rem; }
+
 /* Bildergalerie (z.B. Bilder-Feld einer Kategorie wie bei Kleidermottos) -
    Bilder werden komplett und so groß wie möglich gezeigt, nicht als kleine
    zugeschnittene Vorschau. Tippen/Klicken öffnet das Original zum Reinzoomen. */
