@@ -1068,15 +1068,23 @@ function renderTimelineIconSvg(key) {
 }
 
 function renderTimeline(cat) {
+  const outer = document.createElement('div');
+  if ((cat.content || '').trim()) {
+    const intro = document.createElement('div');
+    intro.className = 'timeline-intro';
+    intro.innerHTML = escapeHtml(cat.content).replace(/\n/g, '<br>');
+    outer.appendChild(intro);
+  }
   const wrap = document.createElement('div');
   wrap.className = 'timeline';
+  outer.appendChild(wrap);
   const days = cat.days || [];
   if (!days.length) {
     const p = document.createElement('p');
     p.className = 'muted';
     p.textContent = 'Noch kein Tagesplan hinterlegt.';
     wrap.appendChild(p);
-    return wrap;
+    return outer;
   }
   days.forEach(day => {
     const row = document.createElement('div');
@@ -1103,7 +1111,7 @@ function renderTimeline(cat) {
     row.appendChild(items);
     wrap.appendChild(row);
   });
-  return wrap;
+  return outer;
 }
 
 // Umschaltbare Reiter ("Bubbles") innerhalb einer Info-Kategorie: eine Reihe
@@ -1120,12 +1128,6 @@ function renderInfoTabs(cat) {
   headingEl.className = 'info-tabs-heading';
   const textEl = document.createElement('div');
   textEl.className = 'info-tabs-text';
-  const imageWrap = document.createElement('div');
-  imageWrap.className = 'info-tabs-image-wrap';
-  const imageEl = document.createElement('img');
-  imageEl.loading = 'lazy';
-  imageEl.alt = '';
-  imageWrap.appendChild(imageEl);
 
   let activeIdx = 0;
 
@@ -1133,13 +1135,6 @@ function renderInfoTabs(cat) {
     const tab = cat.tabs[activeIdx] || {};
     headingEl.textContent = tab.heading || tab.label || '';
     textEl.innerHTML = escapeHtml(tab.text || '').replace(/\n/g, '<br>');
-    if (tab.image) {
-      imageEl.src = tab.image;
-      imageEl.alt = tab.heading || tab.label || '';
-      imageWrap.style.display = '';
-    } else {
-      imageWrap.style.display = 'none';
-    }
     Array.from(tabRow.children).forEach((btn, i) => {
       btn.classList.toggle('active', i === activeIdx);
     });
@@ -1157,7 +1152,6 @@ function renderInfoTabs(cat) {
   wrap.appendChild(tabRow);
   wrap.appendChild(headingEl);
   wrap.appendChild(textEl);
-  wrap.appendChild(imageWrap);
   renderActive();
   return wrap;
 }
@@ -1919,6 +1913,8 @@ function buildCategoryEditor(cat, opts) {
       </div>
 
       <div class="cat-block cat-block-timeline">
+        <label>Einleitungstext (optional, erscheint als Fließtext über dem Zeitstrahl)</label>
+        <textarea data-field="timelineContent" rows="3">${escapeHtml(cat.content || '')}</textarea>
         <label>Tage des Zeitstrahls (Datum, Monat, ein oder mehrere Programmpunkte je Tag)</label>
         <div class="timeline-editor"></div>
         <button type="button" class="btn-icon-text btn-small" data-action="add-day">+ Tag hinzufügen</button>
@@ -2220,13 +2216,11 @@ function buildCategoryEditor(cat, opts) {
           <input type="text" placeholder="Bubble-Beschriftung (z.B. Zimmeraufteilung)" data-tlabel value="${escapeHtml(tab.label || '')}">
           <input type="text" placeholder="Überschrift (meist gleich wie die Beschriftung)" data-theading value="${escapeHtml(tab.heading || '')}">
           <textarea placeholder="Text" rows="3" data-ttext>${escapeHtml(tab.text || '')}</textarea>
-          <input type="text" placeholder="Bild-URL für diesen Reiter (optional, z.B. unterkunft-ausstattung.jpg)" data-timage value="${escapeHtml(tab.image || '')}">
           <button type="button" class="btn-icon-text" data-remove-tab>Entfernen</button>
         `;
         row.querySelector('[data-tlabel]').addEventListener('input', e => localTabs[ti].label = e.target.value);
         row.querySelector('[data-theading]').addEventListener('input', e => localTabs[ti].heading = e.target.value);
         row.querySelector('[data-ttext]').addEventListener('input', e => localTabs[ti].text = e.target.value);
-        row.querySelector('[data-timage]').addEventListener('input', e => localTabs[ti].image = e.target.value.trim());
         row.querySelector('[data-remove-tab]').addEventListener('click', () => {
           localTabs.splice(ti, 1);
           renderTabsEditor();
@@ -2256,7 +2250,7 @@ function buildCategoryEditor(cat, opts) {
       tabsBlock.style.display = useTabsCheckbox.checked ? '' : 'none';
     });
     el.querySelector('[data-action="add-tab"]').addEventListener('click', () => {
-      localTabs.push({ label: '', heading: '', text: '', image: '' });
+      localTabs.push({ label: '', heading: '', text: '' });
       renderTabsEditor();
     });
 
@@ -2412,6 +2406,7 @@ function buildCategoryEditor(cat, opts) {
       } else if (type === 'assignment') {
         updated.assignments = localAssignments.filter(a => (a.name || '').trim() && (a.text || '').trim());
       } else if (type === 'timeline') {
+        updated.content = el.querySelector('[data-field="timelineContent"]').value;
         updated.days = localDays
           .map(d => ({
             date: (d.date || '').trim(),
