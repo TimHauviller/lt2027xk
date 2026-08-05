@@ -383,6 +383,35 @@ label { font-size: 0.85rem; color: var(--muted); display: block; margin-top: 0.5
 }
 .tab-edit-row input, .tab-edit-row textarea { margin: 0 0 0.4rem; }
 
+/* Visueller Zeitstrahl (Tagesplan): vertikale Linie mit einem Datums-
+   Medaillon je Tag, daneben ein oder mehrere Icon+Label-Paare statt
+   Fließtext oder Aufzählungspunkten. */
+.timeline { position: relative; padding-left: 64px; }
+.timeline::before {
+  content: ''; position: absolute; left: 27px; top: 8px; bottom: 8px;
+  width: 1px; background: var(--border);
+}
+.timeline-row { display: flex; align-items: flex-start; margin-bottom: 2rem; position: relative; }
+.timeline-row:last-child { margin-bottom: 0; }
+.timeline-badge {
+  position: absolute; left: -64px; width: 56px; height: 56px; border-radius: 50%;
+  background: var(--grape); color: var(--cream); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; flex-shrink: 0;
+}
+.timeline-badge-num { font-family: 'Playfair Display', serif; font-size: 1.1rem; line-height: 1; }
+.timeline-badge-month { font-size: 0.6rem; letter-spacing: 0.05em; }
+.timeline-items { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; padding-top: 4px; }
+.timeline-item { text-align: center; width: 92px; }
+.timeline-item .timeline-svg { display: block; margin: 0 auto 6px; stroke: var(--grape); fill: none; }
+.timeline-label { font-size: 0.85rem; color: var(--text); display: block; line-height: 1.25; }
+.timeline-divider { font-size: 0.75rem; color: var(--muted); font-style: italic; }
+
+/* Admin-Editor für den Zeitstrahl */
+.timeline-day-edit-row {
+  border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; margin-bottom: 0.5rem;
+}
+.timeline-items-editor .field-row { margin-bottom: 0.4rem; }
+
 /* Bildergalerie (z.B. Bilder-Feld einer Kategorie wie bei Kleidermottos) -
    Bilder werden komplett und so groß wie möglich gezeigt, nicht als kleine
    zugeschnittene Vorschau. Tippen/Klicken öffnet das Original zum Reinzoomen. */

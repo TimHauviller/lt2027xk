@@ -1027,6 +1027,8 @@ function renderCategoryBody(cat, body) {
     body.appendChild(renderGalleryUpload(cat));
   } else if (cat.type === 'assignment') {
     body.appendChild(renderAssignments(cat));
+  } else if (cat.type === 'timeline') {
+    body.appendChild(renderTimeline(cat));
   } else if (Array.isArray(cat.tabs) && cat.tabs.length) {
     body.appendChild(renderInfoTabs(cat));
   } else {
@@ -1036,6 +1038,72 @@ function renderCategoryBody(cat, body) {
   }
   const gal = renderImages(cat.images);
   if (gal) body.appendChild(gal);
+}
+
+// ---------------------------------------------------------------
+// Visueller Zeitstrahl (Tagesplan): Icon-Bibliothek + Render-Funktion.
+// Jeder Tag zeigt ein Datums-Medaillon und daneben ein oder mehrere
+// Icon+Label-Paare - bewusst ohne Fließtext oder Aufzählungspunkte.
+// ---------------------------------------------------------------
+const TIMELINE_ICONS = {
+  suitcase: '<rect x="4" y="8" width="12" height="9" rx="1"/><path d="M8 8V6a2 2 0 0 1 4 0v2"/>',
+  glasses: '<path d="M5 4h4l-1 6a1 1 0 0 1-2 0z"/><path d="M7 10v6M5 16h4"/><path d="M11 4h4l-1 6a1 1 0 0 1-2 0z"/><path d="M13 10v6M11 16h4"/>',
+  sun: '<circle cx="10" cy="10" r="3.2"/><path d="M10 3v1.6M10 15.4V17M3 10h1.6M15.4 10H17M5.3 5.3l1.1 1.1M13.6 13.6l1.1 1.1M5.3 14.7l1.1-1.1M13.6 6.4l1.1-1.1"/>',
+  party: '<path d="M4 16l2-7 3 6M13 16l2-7 2-6-3 6M9.5 9.5l-0.8 6.5M9.5 9.5l0.9 6.5"/><circle cx="6" cy="6" r="0.8" style="fill:var(--grape);stroke:none"/><circle cx="14" cy="4" r="0.8" style="fill:var(--grape);stroke:none"/><circle cx="10" cy="15" r="0.8" style="fill:var(--grape);stroke:none"/>',
+  waves: '<path d="M3 8q2.5-3 5 0t5 0t5 0"/><path d="M3 13q2.5-3 5 0t5 0t5 0"/>',
+  moon: '<path d="M13 4a6 6 0 1 0 4 10 5 5 0 0 1-4-10z"/><circle cx="5" cy="6" r="0.6" style="fill:var(--grape);stroke:none"/><circle cx="4" cy="12" r="0.6" style="fill:var(--grape);stroke:none"/>',
+  bell: '<path d="M6 8a4 4 0 0 1 8 0c0 3 1.5 4 1.5 4h-11S6 11 6 8z"/><path d="M8.5 14a1.5 1.5 0 0 0 3 0"/>',
+  rings: '<circle cx="7.5" cy="11" r="4"/><circle cx="12.5" cy="11" r="4"/>',
+  cup: '<path d="M5 8h9v3a4.5 4.5 0 0 1-4.5 4.5H9.5A4.5 4.5 0 0 1 5 11z"/><path d="M14 9h1.5a2 2 0 0 1 0 4H14"/><path d="M7 4.5q0.8 1 0 2M9.5 4.5q0.8 1 0 2"/>'
+};
+const TIMELINE_ICON_LABELS = {
+  suitcase: 'Koffer (Anreise)', glasses: 'Gläser (Dinner)', sun: 'Sonne (freier Tag)',
+  party: 'Konfetti (Feier)', waves: 'Wellen (Pool)', moon: 'Mond (Abend/Nacht)',
+  bell: 'Glocke (Vorbereitung)', rings: 'Ringe (Hochzeit)', cup: 'Tasse (Frühstück)'
+};
+
+function renderTimelineIconSvg(key) {
+  const inner = TIMELINE_ICONS[key] || '';
+  return `<svg class="timeline-svg" width="26" height="26" viewBox="0 0 20 20" stroke-width="1.3">${inner}</svg>`;
+}
+
+function renderTimeline(cat) {
+  const wrap = document.createElement('div');
+  wrap.className = 'timeline';
+  const days = cat.days || [];
+  if (!days.length) {
+    const p = document.createElement('p');
+    p.className = 'muted';
+    p.textContent = 'Noch kein Tagesplan hinterlegt.';
+    wrap.appendChild(p);
+    return wrap;
+  }
+  days.forEach(day => {
+    const row = document.createElement('div');
+    row.className = 'timeline-row';
+    const badge = document.createElement('div');
+    badge.className = 'timeline-badge';
+    badge.innerHTML = `<span class="timeline-badge-num">${escapeHtml(day.date || '')}</span><span class="timeline-badge-month">${escapeHtml(day.month || '')}</span>`;
+    row.appendChild(badge);
+    const items = document.createElement('div');
+    items.className = 'timeline-items';
+    (day.items || []).forEach(item => {
+      if (item.divider) {
+        const div = document.createElement('span');
+        div.className = 'timeline-divider';
+        div.textContent = item.label || 'oder';
+        items.appendChild(div);
+      } else {
+        const pair = document.createElement('div');
+        pair.className = 'timeline-item';
+        pair.innerHTML = `${renderTimelineIconSvg(item.icon)}<span class="timeline-label">${escapeHtml(item.label || '').replace(/\n/g, '<br>')}</span>`;
+        items.appendChild(pair);
+      }
+    });
+    row.appendChild(items);
+    wrap.appendChild(row);
+  });
+  return wrap;
 }
 
 // Umschaltbare Reiter ("Bubbles") innerhalb einer Info-Kategorie: eine Reihe
@@ -1799,6 +1867,7 @@ function buildCategoryEditor(cat, opts) {
         <option value="form" ${cat.type === 'form' ? 'selected' : ''}>Formular für Gäste</option>
         <option value="checklist" ${cat.type === 'checklist' ? 'selected' : ''}>Checkliste mit Fortschritt</option>
         <option value="day" ${cat.type === 'day' ? 'selected' : ''}>Tag im Tagesplan</option>
+        <option value="timeline" ${cat.type === 'timeline' ? 'selected' : ''}>Zeitstrahl (Tagesplan, visuell mit Icons)</option>
         <option value="gallery" ${cat.type === 'gallery' ? 'selected' : ''}>Foto-Galerie zum Hochladen</option>
         <option value="assignment" ${cat.type === 'assignment' ? 'selected' : ''}>Zuteilung (z.B. "Dein Teil")</option>
       </select>
@@ -1833,6 +1902,12 @@ function buildCategoryEditor(cat, opts) {
         <label>Checklisten-Punkte</label>
         <div class="items-editor"></div>
         <button type="button" class="btn btn-secondary btn-small" data-action="add-item">Punkt hinzufügen</button>
+      </div>
+
+      <div class="cat-block cat-block-timeline">
+        <label>Tage des Zeitstrahls (Datum, Monat, ein oder mehrere Programmpunkte je Tag)</label>
+        <div class="timeline-editor"></div>
+        <button type="button" class="btn-icon-text btn-small" data-action="add-day">+ Tag hinzufügen</button>
       </div>
 
       <div class="cat-block cat-block-gallery">
@@ -1872,6 +1947,7 @@ function buildCategoryEditor(cat, opts) {
       el.querySelector('.cat-block-checklist').style.display = type === 'checklist' ? '' : 'none';
       el.querySelector('.cat-block-gallery').style.display = type === 'gallery' ? '' : 'none';
       el.querySelector('.cat-block-assignment').style.display = type === 'assignment' ? '' : 'none';
+      el.querySelector('.cat-block-timeline').style.display = type === 'timeline' ? '' : 'none';
     }
     updateBlocks(cat.type);
 
@@ -1880,6 +1956,7 @@ function buildCategoryEditor(cat, opts) {
     let localItems = JSON.parse(JSON.stringify(cat.items || []));
     let localAssignments = JSON.parse(JSON.stringify(cat.assignments || []));
     let localTabs = JSON.parse(JSON.stringify(cat.tabs || []));
+    let localDays = JSON.parse(JSON.stringify(cat.days || []));
 
     // Formularfelder: bei Auswahl-Feldern ("select") gibt es pro Feld eine
     // eigene Liste mit einzelnen, entfernbaren Auswahlmöglichkeiten statt
@@ -2167,6 +2244,98 @@ function buildCategoryEditor(cat, opts) {
       renderTabsEditor();
     });
 
+    // Zeitstrahl (Tagesplan): pro Tag ein Datum/Monat und eine Liste aus
+    // Icon+Label-Programmpunkten oder Trennern (z.B. "oder" zwischen zwei
+    // Alternativen wie "Freier Tag" / "Junggesellenabschied").
+    const timelineEditor = el.querySelector('.timeline-editor');
+    function renderTimelineEditorUI() {
+      timelineEditor.innerHTML = '';
+      localDays.forEach((day, di) => {
+        day.items = day.items || [];
+        const dayWrap = document.createElement('div');
+        dayWrap.className = 'timeline-day-edit-row';
+        dayWrap.innerHTML = `
+          <div class="field-row">
+            <input type="text" placeholder="Datum (z.B. 09)" data-day-date value="${escapeHtml(day.date || '')}" style="width:25%">
+            <input type="text" placeholder="Monat (z.B. Mai)" data-day-month value="${escapeHtml(day.month || '')}" style="width:25%">
+            <button type="button" class="btn-icon-text" data-remove-day>Tag entfernen</button>
+          </div>
+          <div class="timeline-items-editor"></div>
+          <div class="field-row">
+            <button type="button" class="btn-icon-text btn-small" data-add-item>+ Programmpunkt</button>
+            <button type="button" class="btn-icon-text btn-small" data-add-divider>+ Trenner (z.B. "oder")</button>
+          </div>
+        `;
+        dayWrap.querySelector('[data-day-date]').addEventListener('input', e => { day.date = e.target.value; });
+        dayWrap.querySelector('[data-day-month]').addEventListener('input', e => { day.month = e.target.value; });
+        dayWrap.querySelector('[data-remove-day]').addEventListener('click', () => {
+          localDays.splice(di, 1);
+          renderTimelineEditorUI();
+        });
+
+        const itemsEditor = dayWrap.querySelector('.timeline-items-editor');
+        function renderDayItems() {
+          itemsEditor.innerHTML = '';
+          day.items.forEach((item, ii) => {
+            const row = document.createElement('div');
+            row.className = 'field-row';
+            if (item.divider) {
+              row.innerHTML = `
+                <input type="text" placeholder='Trenner-Text (z.B. "oder")' data-item-label value="${escapeHtml(item.label || '')}" style="width:60%">
+                <button type="button" class="btn-icon-text" data-remove-item>Entfernen</button>
+              `;
+            } else {
+              row.innerHTML = `
+                <select data-item-icon style="width:32%">
+                  ${Object.keys(TIMELINE_ICONS).map(k => `<option value="${k}" ${item.icon === k ? 'selected' : ''}>${TIMELINE_ICON_LABELS[k]}</option>`).join('')}
+                </select>
+                <input type="text" placeholder="Beschriftung (z.B. Welcome Dinner)" data-item-label value="${escapeHtml(item.label || '')}" style="width:45%">
+                <button type="button" class="btn-icon-text" data-remove-item>Entfernen</button>
+              `;
+            }
+            row.querySelector('[data-item-label]').addEventListener('input', e => { item.label = e.target.value; });
+            const iconSel = row.querySelector('[data-item-icon]');
+            if (iconSel) iconSel.addEventListener('change', e => { item.icon = e.target.value; });
+            row.querySelector('[data-remove-item]').addEventListener('click', () => {
+              day.items.splice(ii, 1);
+              renderDayItems();
+            });
+            itemsEditor.appendChild(row);
+          });
+        }
+        renderDayItems();
+        dayWrap.querySelector('[data-add-item]').addEventListener('click', () => {
+          day.items.push({ icon: 'sun', label: '' });
+          renderDayItems();
+        });
+        dayWrap.querySelector('[data-add-divider]').addEventListener('click', () => {
+          day.items.push({ divider: true, label: 'oder' });
+          renderDayItems();
+        });
+
+        const removeDayBtn = dayWrap.querySelector('[data-remove-day]');
+        if (di > 0) {
+          const upBtn = document.createElement('button');
+          upBtn.type = 'button'; upBtn.className = 'btn-icon-text'; upBtn.textContent = 'Hoch';
+          upBtn.addEventListener('click', () => { moveInArray(localDays, di, -1); renderTimelineEditorUI(); });
+          removeDayBtn.parentNode.insertBefore(upBtn, removeDayBtn);
+        }
+        if (di < localDays.length - 1) {
+          const downBtn = document.createElement('button');
+          downBtn.type = 'button'; downBtn.className = 'btn-icon-text'; downBtn.textContent = 'Runter';
+          downBtn.addEventListener('click', () => { moveInArray(localDays, di, 1); renderTimelineEditorUI(); });
+          removeDayBtn.parentNode.insertBefore(downBtn, removeDayBtn);
+        }
+
+        timelineEditor.appendChild(dayWrap);
+      });
+    }
+    renderTimelineEditorUI();
+    el.querySelector('[data-action="add-day"]').addEventListener('click', () => {
+      localDays.push({ date: '', month: '', items: [] });
+      renderTimelineEditorUI();
+    });
+
     el.querySelector('[data-action="add-field"]').addEventListener('click', () => {
       localFields.push({ key: '', label: '', type: 'text', options: [] });
       renderFieldsEditor();
@@ -2226,6 +2395,14 @@ function buildCategoryEditor(cat, opts) {
         updated.items = localItems.filter(it => it.label && it.label.trim());
       } else if (type === 'assignment') {
         updated.assignments = localAssignments.filter(a => (a.name || '').trim() && (a.text || '').trim());
+      } else if (type === 'timeline') {
+        updated.days = localDays
+          .map(d => ({
+            date: (d.date || '').trim(),
+            month: (d.month || '').trim(),
+            items: (d.items || []).filter(it => (it.label || '').trim())
+          }))
+          .filter(d => d.date || d.month || d.items.length);
       }
       const ok = await withSaveFeedback(saveBtn, () => saveCategory(cat.id, updated));
       if (ok && opts.onSaved) await opts.onSaved({ id: cat.id, ...updated });
