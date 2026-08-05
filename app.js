@@ -1128,6 +1128,12 @@ function renderInfoTabs(cat) {
   headingEl.className = 'info-tabs-heading';
   const textEl = document.createElement('div');
   textEl.className = 'info-tabs-text';
+  const imageWrap = document.createElement('div');
+  imageWrap.className = 'info-tabs-image-wrap';
+  const imageEl = document.createElement('img');
+  imageEl.loading = 'lazy';
+  imageEl.alt = '';
+  imageWrap.appendChild(imageEl);
 
   let activeIdx = 0;
 
@@ -1135,6 +1141,13 @@ function renderInfoTabs(cat) {
     const tab = cat.tabs[activeIdx] || {};
     headingEl.textContent = tab.heading || tab.label || '';
     textEl.innerHTML = escapeHtml(tab.text || '').replace(/\n/g, '<br>');
+    if (tab.image) {
+      imageEl.src = tab.image;
+      imageEl.alt = tab.heading || tab.label || '';
+      imageWrap.style.display = '';
+    } else {
+      imageWrap.style.display = 'none';
+    }
     Array.from(tabRow.children).forEach((btn, i) => {
       btn.classList.toggle('active', i === activeIdx);
     });
@@ -1152,6 +1165,7 @@ function renderInfoTabs(cat) {
   wrap.appendChild(tabRow);
   wrap.appendChild(headingEl);
   wrap.appendChild(textEl);
+  wrap.appendChild(imageWrap);
   renderActive();
   return wrap;
 }
@@ -2216,11 +2230,13 @@ function buildCategoryEditor(cat, opts) {
           <input type="text" placeholder="Bubble-Beschriftung (z.B. Zimmeraufteilung)" data-tlabel value="${escapeHtml(tab.label || '')}">
           <input type="text" placeholder="Überschrift (meist gleich wie die Beschriftung)" data-theading value="${escapeHtml(tab.heading || '')}">
           <textarea placeholder="Text" rows="3" data-ttext>${escapeHtml(tab.text || '')}</textarea>
+          <input type="text" placeholder="Bild-URL für diesen Reiter (optional, z.B. unterkunft-ausstattung.jpg)" data-timage value="${escapeHtml(tab.image || '')}">
           <button type="button" class="btn-icon-text" data-remove-tab>Entfernen</button>
         `;
         row.querySelector('[data-tlabel]').addEventListener('input', e => localTabs[ti].label = e.target.value);
         row.querySelector('[data-theading]').addEventListener('input', e => localTabs[ti].heading = e.target.value);
         row.querySelector('[data-ttext]').addEventListener('input', e => localTabs[ti].text = e.target.value);
+        row.querySelector('[data-timage]').addEventListener('input', e => localTabs[ti].image = e.target.value.trim());
         row.querySelector('[data-remove-tab]').addEventListener('click', () => {
           localTabs.splice(ti, 1);
           renderTabsEditor();
@@ -2250,7 +2266,7 @@ function buildCategoryEditor(cat, opts) {
       tabsBlock.style.display = useTabsCheckbox.checked ? '' : 'none';
     });
     el.querySelector('[data-action="add-tab"]').addEventListener('click', () => {
-      localTabs.push({ label: '', heading: '', text: '' });
+      localTabs.push({ label: '', heading: '', text: '', image: '' });
       renderTabsEditor();
     });
 
