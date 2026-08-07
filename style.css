@@ -566,7 +566,7 @@ table.responses-table th, table.responses-table td {
      zwei Programmpunkte (z.B. "Freier Tag" / "oder" / "Junggesellenabschied")
      nebeneinander in eine Zeile passen statt umzubrechen. */
   .timeline { padding-left: 50px; }
-  .timeline::before { left: 28px; }
+  .timeline::before { left: 21px; }
   .timeline-badge { left: -50px; width: 44px; height: 44px; }
   .timeline-badge-num { font-size: 0.95rem; }
   .timeline-badge-month { font-size: 0.55rem; }
