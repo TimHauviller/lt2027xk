@@ -1177,6 +1177,10 @@ function renderInfoTabs(cat) {
 // ---------------------------------------------------------------
 function renderGalleryUpload(cat) {
   const wrap = document.createElement('div');
+  const info = document.createElement('p');
+  info.className = 'gallery-info-text';
+  info.textContent = 'Hier könnt ihr während der Hochzeitstage eure Fotos hochladen – alle Gäste können sie sehen und herunterladen.';
+  wrap.appendChild(info);
 
   if (CLOUDINARY_CLOUD_NAME === 'DEIN_CLOUD_NAME') {
     const hint = document.createElement('p');
