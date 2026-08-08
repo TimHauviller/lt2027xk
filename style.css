@@ -436,7 +436,7 @@ abgeschnitten werden. */
 .timeline-items { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; padding-top: 4px; }
 .timeline-item { text-align: center; width: 92px; }
 .timeline-item .timeline-svg { display: block; margin: 0 auto 6px; stroke: var(--grape); fill: none; }
-.timeline-label { font-size: 0.85rem; color: var(--text); display: block; line-height: 1.25; }
+.timeline-label { font-size: 0.85rem; color: var(--text); display: block; line-height: 1.25; overflow-wrap: break-word; hyphens: auto; }
 .timeline-divider { font-size: 0.75rem; color: var(--muted); font-style: italic; }
 
 /* Admin-Editor für den Zeitstrahl */
@@ -584,7 +584,7 @@ table.responses-table th, table.responses-table td {
      zwei Programmpunkte (z.B. "Freier Tag" / "oder" / "Junggesellenabschied")
      nebeneinander in eine Zeile passen statt umzubrechen. */
   .timeline { padding-left: 50px; }
-  .timeline::before { left: 28px; }
+  .timeline::before { left: 21px; }
   .timeline-badge { left: -50px; width: 44px; height: 44px; }
   .timeline-badge-num { font-size: 0.95rem; }
   .timeline-badge-month { font-size: 0.55rem; }
