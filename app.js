@@ -445,7 +445,7 @@ function renderHub() {
   }
   state.sections.forEach((sec, idx) => {
     const catsInSection = state.categories.filter(c => c.sectionId === sec.id);
-    const fillableCats = catsInSection.filter(c => c.type === 'form' || c.type === 'checklist');
+    const fillableCats = catsInSection.filter(c => (c.type === 'form' && !c.optionalForm) || c.type === 'checklist');
 
     const cardWrap = document.createElement('div');
     cardWrap.className = 'hub-card' + (fillableCats.length ? ' hub-card--todo' : '');
@@ -1922,6 +1922,10 @@ function buildCategoryEditor(cat, opts) {
         <label>Formularfelder</label>
         <div class="fields-editor"></div>
         <button type="button" class="btn btn-secondary btn-small" data-action="add-field">Feld hinzufügen</button>
+        <label class="checkbox-label">
+          <input type="checkbox" data-field="optionalForm" ${cat.optionalForm ? 'checked' : ''}>
+          Optional - zählt nicht in der Fortschrittsanzeige auf der Übersicht (z.B. bei einer freiwilligen Frage)
+        </label>
       </div>
 
       <div class="cat-block cat-block-checklist">
@@ -2421,6 +2425,7 @@ function buildCategoryEditor(cat, opts) {
         updated.qna = localQna.filter(q => (q.question || '').trim() && (q.answer || '').trim());
       } else if (type === 'form') {
         updated.fields = localFields.filter(f => f.key && f.label).map(f => ({ ...f, options: (f.options || []).map(o => (o || '').trim()).filter(Boolean) }));
+        updated.optionalForm = el.querySelector('[data-field="optionalForm"]').checked;
       } else if (type === 'checklist') {
         updated.items = localItems.filter(it => it.label && it.label.trim());
       } else if (type === 'assignment') {
