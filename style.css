@@ -357,24 +357,6 @@ label { font-size: 0.85rem; color: var(--muted); display: block; margin-top: 0.5
 .faq-question { font-weight: 600; color: var(--sage-dark); margin: 0 0 0.25rem; }
 .faq-answer { margin: 0; }
 
-/* Eigene Frage stellen: immer als letzter, ausklappbarer Punkt unter den
-FAQ. Klick auf die Zeile öffnet ein Textfeld + Speichern-Button, der die
-Frage - wie auch Unverträglichkeiten/Essenswünsche - in die responses-
-Collection schreibt. */
-.faq-own-question { border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 0.25rem; }
-.faq-own-toggle {
-  display: flex; justify-content: space-between; align-items: center; width: 100%;
-  background: none; border: none; padding: 0; margin: 0; cursor: pointer; font-family: inherit; text-align: left;
-}
-.faq-own-toggle .faq-question { margin: 0; }
-.faq-own-chevron {
-  width: 9px; height: 9px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
-  transform: rotate(45deg); transition: transform 0.2s ease; flex-shrink: 0; margin-left: 0.75rem;
-}
-.faq-own-toggle.open .faq-own-chevron { transform: rotate(-135deg); }
-.faq-own-panel { margin-top: 0.75rem; }
-.faq-own-panel textarea { margin-bottom: 0.6rem; }
-
 /* Checkliste */
 .checklist-item { display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0; cursor: pointer; }
 .checklist-item input[type=checkbox] { width: 18px; height: 18px; flex-shrink: 0; }
@@ -433,11 +415,11 @@ abgeschnitten werden. */
 }
 .timeline-badge-num { font-family: 'Playfair Display', serif; font-size: 1.1rem; line-height: 1; }
 .timeline-badge-month { font-size: 0.6rem; letter-spacing: 0.05em; }
-.timeline-items { display: flex; align-items: flex-start; gap: 1.5rem; flex-wrap: wrap; padding-top: 4px; }
+.timeline-items { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; padding-top: 4px; }
 .timeline-item { text-align: center; width: 92px; }
 .timeline-item .timeline-svg { display: block; margin: 0 auto 6px; stroke: var(--grape); fill: none; }
 .timeline-label { font-size: 0.85rem; color: var(--text); display: block; line-height: 1.25; overflow-wrap: break-word; hyphens: auto; }
-.timeline-divider { font-size: 0.75rem; color: var(--muted); font-style: italic; padding-top: 6px; }
+.timeline-divider { font-size: 0.75rem; color: var(--muted); font-style: italic; }
 
 /* Admin-Editor für den Zeitstrahl */
 .timeline-day-edit-row {
@@ -592,5 +574,5 @@ table.responses-table th, table.responses-table td {
   .timeline-item { width: 70px; }
   .timeline-item .timeline-svg { width: 22px; height: 22px; }
   .timeline-label { font-size: 0.72rem; }
-  .timeline-divider { font-size: 0.68rem; padding-top: 4px; }
+  .timeline-divider { font-size: 0.68rem; }
 }

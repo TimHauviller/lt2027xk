@@ -639,109 +639,22 @@ function renderFaq(cat) {
     p.className = 'muted';
     p.textContent = 'Noch keine Fragen hinterlegt.';
     wrap.appendChild(p);
-  } else {
-    list.forEach(item => {
-      const block = document.createElement('div');
-      block.className = 'faq-item';
-      const q = document.createElement('p');
-      q.className = 'faq-question';
-      q.textContent = item.question;
-      const a = document.createElement('p');
-      a.className = 'faq-answer';
-      a.textContent = item.answer;
-      block.appendChild(q);
-      block.appendChild(a);
-      wrap.appendChild(block);
-    });
+    return wrap;
   }
-  wrap.appendChild(renderFaqOwnQuestion(cat));
+  list.forEach(item => {
+    const block = document.createElement('div');
+    block.className = 'faq-item';
+    const q = document.createElement('p');
+    q.className = 'faq-question';
+    q.textContent = item.question;
+    const a = document.createElement('p');
+    a.className = 'faq-answer';
+    a.textContent = item.answer;
+    block.appendChild(q);
+    block.appendChild(a);
+    wrap.appendChild(block);
+  });
   return wrap;
-}
-
-// Zusätzlicher, immer angehängter Punkt unter den FAQ: Gäste können hier per
-// Klick einen ausklappbaren Bereich öffnen, eine eigene Frage eintippen und
-// abschicken. Landet - genau wie Unverträglichkeiten/Essenswünsche - in der
-// responses-Collection (answers.<categoryId>.Frage) und erscheint dadurch
-// automatisch im Admin-Tab "Antworten".
-function renderFaqOwnQuestion(cat) {
-  const block = document.createElement('div');
-  block.className = 'faq-item faq-own-question';
-
-  const toggle = document.createElement('button');
-  toggle.type = 'button';
-  toggle.className = 'faq-own-toggle';
-  toggle.innerHTML = '<span class="faq-question">Habt ihr eine eigene Frage an uns?</span><span class="faq-own-chevron"></span>';
-
-  const panel = document.createElement('div');
-  panel.className = 'faq-own-panel hidden';
-
-  const resp = state.currentGuest ? state.responses.find(r => r.id === state.currentGuest.id) : null;
-  const existing = (resp && resp.answers && resp.answers[cat.id] && resp.answers[cat.id].Frage) || '';
-  let draftValue = existing;
-  let locked = existing.trim() !== '';
-
-  const textarea = document.createElement('textarea');
-  textarea.rows = 3;
-  textarea.placeholder = 'Schreib uns hier deine Frage …';
-  textarea.value = existing;
-  textarea.addEventListener('input', () => { draftValue = textarea.value; });
-
-  const actionsRow = document.createElement('div');
-  actionsRow.className = 'form-save-row';
-  const saveBtn = document.createElement('button');
-  saveBtn.type = 'button';
-  saveBtn.className = 'btn btn-primary';
-  saveBtn.textContent = 'Frage senden';
-  const editBtn = document.createElement('button');
-  editBtn.type = 'button';
-  editBtn.className = 'btn btn-secondary hidden';
-  editBtn.textContent = 'Ändern';
-  actionsRow.appendChild(saveBtn);
-  actionsRow.appendChild(editBtn);
-
-  const statusEl = document.createElement('p');
-  statusEl.className = 'saved-hint';
-
-  function setLocked(isLocked) {
-    locked = isLocked;
-    textarea.disabled = isLocked;
-    saveBtn.classList.toggle('hidden', isLocked);
-    editBtn.classList.toggle('hidden', !isLocked);
-    statusEl.textContent = isLocked ? 'Danke, wir haben eure Frage erhalten!' : '';
-  }
-
-  saveBtn.addEventListener('click', async () => {
-    if (!state.currentGuest) {
-      alert('Bitte wähle zuerst deinen Namen aus, um eine Frage zu stellen.');
-      return;
-    }
-    if (!draftValue.trim()) return;
-    const ok = await withSaveFeedback(
-      saveBtn,
-      () => saveGuestFormAnswers(cat.id, { Frage: draftValue }),
-      'Deine Frage konnte leider nicht gesendet werden. Bitte versuch es gleich nochmal.'
-    );
-    if (ok) setLocked(true);
-  });
-  editBtn.addEventListener('click', () => setLocked(false));
-
-  if (!state.currentGuest) {
-    statusEl.textContent = 'Bitte wähle zuerst deinen Namen aus, um eine Frage zu stellen.';
-  }
-  setLocked(locked);
-
-  panel.appendChild(textarea);
-  panel.appendChild(actionsRow);
-  panel.appendChild(statusEl);
-
-  toggle.addEventListener('click', () => {
-    panel.classList.toggle('hidden');
-    toggle.classList.toggle('open');
-  });
-
-  block.appendChild(toggle);
-  block.appendChild(panel);
-  return block;
 }
 
 function renderAssignments(cat) {
